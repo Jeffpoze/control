@@ -1,0 +1,40 @@
+# Builds the Android app from main and attaches it to the "android-latest"
+# release, so the newest APK is always one tap away on a phone.
+name: Android release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-release
+  cancel-in-progress: true
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter build apk --release
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp build/app/outputs/flutter-apk/app-release.apk control.apk
+          git tag -f android-latest
+          git push -f origin android-latest
+          if ! gh release view android-latest > /dev/null 2>&1; then
+            gh release create android-latest --prerelease \
+              --title "Control for Android (latest build)" \
+              --notes "Built automatically from main. Download control.apk on your Android phone and open it to install. Android asks once to allow installs from your browser or file manager."
+          fi
+          gh release upload android-latest control.apk --clobber

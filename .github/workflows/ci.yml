@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: dart format --output=none --set-exit-if-changed lib test
+      - name: Analyze
+        # Machine output is turned into GitHub annotations so each issue
+        # shows up on the commit and pull request, not just in the raw log.
+        run: |
+          set +e
+          dart analyze --fatal-infos --format=machine > analyze.txt 2>&1
+          code=$?
+          while IFS='|' read -r sev type rule file line col len msg; do
+            case "$sev" in
+              ERROR) level=error ;;
+              WARNING) level=warning ;;
+              INFO) level=notice ;;
+              *) continue ;;
+            esac
+            echo "::${level} file=${file#$GITHUB_WORKSPACE/},line=${line},col=${col},title=${rule}::${msg}"
+          done < analyze.txt
+          [ $code -eq 0 ] || cat analyze.txt
+          exit $code
+      - run: flutter test
+
+  ios-build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter build ios --release --no-codesign
+
+  android-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter build apk --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: control-android
+          path: build/app/outputs/flutter-apk/app-release.apk
