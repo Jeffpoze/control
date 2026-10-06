@@ -592,7 +592,10 @@ class _AddComicScreenState extends State<_AddComicScreen> {
                           icon: Icons.auto_stories_outlined,
                         ),
                         title: Text(
-                          [r.name, if (r.year.isNotEmpty) '(${r.year})'].join(' '),
+                          [
+                            r.name,
+                            if (r.year.isNotEmpty) '(${r.year})',
+                          ].join(' '),
                         ),
                         subtitle: Text(
                           [
@@ -601,7 +604,10 @@ class _AddComicScreenState extends State<_AddComicScreen> {
                           ].where((x) => x.isNotEmpty).join(' · '),
                         ),
                         trailing: r.inLibrary || _added.contains(r.id)
-                            ? const StatusChip('In library', color: Colors.green)
+                            ? const StatusChip(
+                                'In library',
+                                color: Colors.green,
+                              )
                             : IconButton(
                                 tooltip: 'Add',
                                 icon: const Icon(Icons.add_circle_outline),

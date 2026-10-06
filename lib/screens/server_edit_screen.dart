@@ -237,7 +237,8 @@ class _ServerEditScreenState extends State<ServerEditScreen> {
                     onPressed: () => setState(() => _showSecret = !_showSecret),
                   ),
                 ),
-                validator: (v) => (v ?? '').trim().isEmpty && !kind.apiKeyOptional
+                validator: (v) =>
+                    (v ?? '').trim().isEmpty && !kind.apiKeyOptional
                     ? 'Enter the API key'
                     : null,
               )

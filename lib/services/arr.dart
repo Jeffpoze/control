@@ -542,8 +542,7 @@ class ArrClient extends ServiceClient {
     final existing = (await getJson('$_v/notification') as List)
         .cast<Map>()
         .where(
-          (m) =>
-              m['implementation'] == 'Ntfy' && m['name'] == notificationName,
+          (m) => m['implementation'] == 'Ntfy' && m['name'] == notificationName,
         )
         .firstOrNull;
     final body = ntfyBody(

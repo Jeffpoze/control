@@ -43,9 +43,7 @@ class ComicIssue {
       (raw['displayState'] ?? raw['legacyStatus'] ?? raw['status'] ?? '')
           .toString();
   bool get owned =>
-      raw['owned'] == true ||
-      state == 'Downloaded' ||
-      state == 'Archived';
+      raw['owned'] == true || state == 'Downloaded' || state == 'Archived';
 }
 
 /// A wanted or upcoming issue, with its series name.
@@ -279,9 +277,10 @@ class ComicarrClient extends ServiceClient {
   /// Searches every missing issue of a series. Comicarr asks for a preview
   /// first and a confirmation with its token; returns how many it queued.
   Future<int> searchMissing(String seriesId) async {
-    final preview =
-        await _call('GET', '/api/series/$seriesId/search-missing/preview')
-            as Map;
+    final preview = await _call(
+      'GET',
+      '/api/series/$seriesId/search-missing/preview',
+    ) as Map;
     final eligible = asInt(preview['eligibleCount']);
     if (eligible == 0 || preview['preview_token'] == null) return 0;
     await _call(
@@ -309,7 +308,9 @@ class ComicarrClient extends ServiceClient {
         '/api/search/comics',
         json: {'name': name, 'limit': 30},
       );
-      final list = json is Map ? json['results'] as List? ?? const [] : const [];
+      final list = json is Map
+          ? json['results'] as List? ?? const []
+          : const [];
       return [
         for (final r in list)
           if (r is Map) ComicSearchResult(r.cast()),

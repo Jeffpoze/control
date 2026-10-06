@@ -168,10 +168,5 @@ class NtfyClient extends ServiceClient {
 
   /// Sends a message straight to the topic, to check the phone receives it.
   Future<void> publish(String topic, String message, {String? title}) =>
-      request(
-        'POST',
-        '/$topic',
-        headers: {'Title': ?title},
-        body: message,
-      );
+      request('POST', '/$topic', headers: {'Title': ?title}, body: message);
 }

@@ -87,9 +87,9 @@ class _TracearrScreenState extends State<TracearrScreen> {
           IconButton(
             tooltip: 'Now playing',
             icon: const Icon(Icons.play_circle_outline),
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const ActivityScreen()),
-            ),
+            onPressed: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const ActivityScreen())),
           ),
         ],
       ),

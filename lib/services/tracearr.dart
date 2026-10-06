@@ -101,15 +101,13 @@ class TracearrClient extends ServiceClient implements StreamingClient {
   Future<TracearrToday> today() async =>
       TracearrToday((await getJson('$_p/stats/today') as Map).cast());
 
-  Future<List<TracearrPlay>> history({int pageSize = 40}) async =>
-      parseHistory(
-        await getJson('$_p/history', query: {'pageSize': '$pageSize'}),
-        _base,
-      );
-
-  Future<List<TracearrAlert>> alerts() async => parseAlerts(
-    await getJson('$_p/violations', query: {'pageSize': '30'}),
+  Future<List<TracearrPlay>> history({int pageSize = 40}) async => parseHistory(
+    await getJson('$_p/history', query: {'pageSize': '$pageSize'}),
+    _base,
   );
+
+  Future<List<TracearrAlert>> alerts() async =>
+      parseAlerts(await getJson('$_p/violations', query: {'pageSize': '30'}));
 
   /// Poster URLs come back relative to the Tracearr address and need no key.
   static String? absolute(Uri? base, Object? url) {
@@ -182,12 +180,11 @@ class TracearrClient extends ServiceClient implements StreamingClient {
 
   /// "45.2 Mbps" → 45200 (kbps). Tracearr shows "—" when idle.
   static int? parseBitrate(Object? v) {
-    final m = RegExp(
-      r'([\d.]+)\s*([kMG])bps',
-    ).firstMatch(v?.toString() ?? '');
+    final m = RegExp(r'([\d.]+)\s*([kMG])bps').firstMatch(v?.toString() ?? '');
     if (m == null) return null;
     final n = double.parse(m[1]!);
-    return (n * switch (m[2]) {
+    return (n *
+            switch (m[2]) {
               'G' => 1000000,
               'M' => 1000,
               _ => 1,

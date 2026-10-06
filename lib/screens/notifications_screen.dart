@@ -126,9 +126,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   Future<void> _copy() async {
     final target = _target(context.read<ServerStore>());
-    await Clipboard.setData(
-      ClipboardData(text: target.webUrl.toString()),
-    );
+    await Clipboard.setData(ClipboardData(text: target.webUrl.toString()));
     if (mounted) showMessage(context, 'Copied ${target.webUrl}');
   }
 
@@ -179,9 +177,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     value: s.id,
                     title: Text(s.name),
                     subtitle: Text(
-                      [s.localUrl, s.remoteUrl]
-                          .where((u) => u.isNotEmpty)
-                          .join(' · '),
+                      [
+                        s.localUrl,
+                        s.remoteUrl,
+                      ].where((u) => u.isNotEmpty).join(' · '),
                     ),
                   ),
               ],
@@ -213,7 +212,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           const SectionHeader('Notify me when'),
           SwitchListTile(
             title: const Text('Something is downloaded'),
-            subtitle: const Text('Imported or upgraded by Sonarr, Radarr or Lidarr'),
+            subtitle: const Text(
+              'Imported or upgraded by Sonarr, Radarr or Lidarr',
+            ),
             value: events.imports,
             onChanged: (v) => _events(
               NotifyEvents(
@@ -311,7 +312,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.notifications_active_outlined),
-              label: Text(_done ? 'Update notifications' : 'Set up notifications'),
+              label: Text(
+                _done ? 'Update notifications' : 'Set up notifications',
+              ),
             ),
           ),
           const SectionHeader('On this phone'),

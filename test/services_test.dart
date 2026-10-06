@@ -1120,7 +1120,10 @@ void main() {
           expect(req.headers['X-Requested-With'], 'ComicarrFrontend');
           if (req.url.path == '/api/auth/login') {
             logins++;
-            expect(jsonDecode(req.body), {'username': 'jeff', 'password': 'pw'});
+            expect(jsonDecode(req.body), {
+              'username': 'jeff',
+              'password': 'pw',
+            });
             return json(
               {'success': true, 'username': 'jeff'},
               headers: {
@@ -1181,14 +1184,11 @@ void main() {
     });
 
     test('series without a provider cover uses Comicarr\'s own', () {
-      final s = ComicarrClient.parseSeries(
-        {
-          'comics': [
-            {'ComicID': '1', 'ComicImage': '/api/metadata/art/1'},
-          ],
-        },
-        Uri.parse('http://192.168.5.150:8090'),
-      );
+      final s = ComicarrClient.parseSeries({
+        'comics': [
+          {'ComicID': '1', 'ComicImage': '/api/metadata/art/1'},
+        ],
+      }, Uri.parse('http://192.168.5.150:8090'));
       expect(s.single.coverUrl, 'http://192.168.5.150:8090/api/metadata/art/1');
     });
 
@@ -1283,7 +1283,12 @@ void main() {
   group('TMDB', () {
     test('trending today, in the same shape as Overseerr', () async {
       final c = TmdbClient(
-        server(ServiceKind.tmdb, local: '', remote: TmdbClient.defaultUrl, apiKey: 'shortkey'),
+        server(
+          ServiceKind.tmdb,
+          local: '',
+          remote: TmdbClient.defaultUrl,
+          apiKey: 'shortkey',
+        ),
         httpClient: MockClient((req) async {
           expect(req.url.host, 'api.themoviedb.org');
           expect(req.url.path, '/3/trending/all/day');
@@ -1301,7 +1306,12 @@ void main() {
                 'release_date': '2026-09-30',
               },
               {'id': 2, 'media_type': 'person', 'name': 'Someone'},
-              {'id': 3, 'media_type': 'tv', 'name': 'Show', 'first_air_date': '2025-01-01'},
+              {
+                'id': 3,
+                'media_type': 'tv',
+                'name': 'Show',
+                'first_air_date': '2025-01-01',
+              },
             ],
           });
         }),
@@ -1318,7 +1328,12 @@ void main() {
     test('read access token goes in the Authorization header', () async {
       final token = 'eyJ${'a' * 60}';
       final c = TmdbClient(
-        server(ServiceKind.tmdb, local: '', remote: TmdbClient.defaultUrl, apiKey: token),
+        server(
+          ServiceKind.tmdb,
+          local: '',
+          remote: TmdbClient.defaultUrl,
+          apiKey: token,
+        ),
         httpClient: MockClient((req) async {
           expect(req.headers['Authorization'], 'Bearer $token');
           expect(req.url.queryParameters.containsKey('api_key'), isFalse);
