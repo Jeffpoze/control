@@ -1,7 +1,15 @@
 import 'package:flutter/material.dart';
 
 /// What a service is for. Drives where it shows up in the app.
-enum ServiceGroup { downloader, media, indexer, other }
+enum ServiceGroup {
+  downloader,
+  media,
+  library,
+  indexer,
+  requests,
+  mediaServer,
+  notifications,
+}
 
 /// How a service authenticates.
 enum AuthStyle { apiKey, login }
@@ -60,57 +68,57 @@ enum ServiceKind {
   ),
   overseerr(
     'Overseerr / Jellyseerr',
-    ServiceGroup.other,
+    ServiceGroup.requests,
     AuthStyle.apiKey,
     5055,
     Icons.playlist_add_check,
   ),
   tautulli(
     'Tautulli',
-    ServiceGroup.other,
+    ServiceGroup.mediaServer,
     AuthStyle.apiKey,
     8181,
     Icons.insights_outlined,
   ),
-  emby('Emby', ServiceGroup.other, AuthStyle.apiKey, 8096, Icons.live_tv),
+  emby('Emby', ServiceGroup.mediaServer, AuthStyle.apiKey, 8096, Icons.live_tv),
   jellyfin(
     'Jellyfin',
-    ServiceGroup.other,
+    ServiceGroup.mediaServer,
     AuthStyle.apiKey,
     8096,
     Icons.smart_display_outlined,
   ),
   bazarr(
     'Bazarr',
-    ServiceGroup.other,
+    ServiceGroup.library,
     AuthStyle.apiKey,
     6767,
     Icons.subtitles_outlined,
   ),
   comicarr(
     'Comicarr',
-    ServiceGroup.other,
+    ServiceGroup.library,
     AuthStyle.login,
     8090,
     Icons.auto_stories_outlined,
   ),
   tracearr(
     'Tracearr',
-    ServiceGroup.other,
+    ServiceGroup.mediaServer,
     AuthStyle.apiKey,
     3000,
     Icons.query_stats,
   ),
   tmdb(
     'TMDB',
-    ServiceGroup.other,
+    ServiceGroup.requests,
     AuthStyle.apiKey,
     443,
     Icons.local_movies_outlined,
   ),
   ntfy(
     'ntfy',
-    ServiceGroup.other,
+    ServiceGroup.notifications,
     AuthStyle.apiKey,
     80,
     Icons.notifications_outlined,
@@ -133,6 +141,14 @@ enum ServiceKind {
   /// Whether a username is required (NZBGet and Transmission allow blank).
   bool get usernameOptional =>
       this == ServiceKind.nzbget || this == ServiceKind.transmission;
+
+  /// What Media calls this kind: TV, Movies, Music.
+  String get mediaLabel => switch (this) {
+    ServiceKind.sonarr => 'TV',
+    ServiceKind.radarr => 'Movies',
+    ServiceKind.lidarr => 'Music',
+    _ => label,
+  };
 
   /// Servers that can say who's watching what.
   static const streaming = {
@@ -212,6 +228,11 @@ class ServerConfig {
   final String customHeaders;
 
   Map<String, String> get headerMap => parseHeaderLines(customHeaders);
+
+  /// "TV", or "TV · 4K" when the user named a second Sonarr "4K".
+  String get mediaLabel => name == kind.label || name.isEmpty
+      ? kind.mediaLabel
+      : '${kind.mediaLabel} · $name';
 
   List<Uri> get baseUris => [
     localUrl,

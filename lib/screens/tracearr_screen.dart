@@ -73,7 +73,7 @@ class _TracearrScreenState extends State<TracearrScreen> {
         appBar: AppBar(title: const Text('Stats and history')),
         body: NoServersView(
           what: 'Tracearr',
-          onAdd: () => addServer(context, group: ServiceGroup.other),
+          onAdd: () => addServer(context, group: ServiceGroup.mediaServer),
         ),
       );
     }

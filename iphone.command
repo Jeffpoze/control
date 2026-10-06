@@ -3,6 +3,15 @@
 cd "$(dirname "$0")"
 export PATH="$HOME/flutter/bin:$PATH"
 
+# The app's TMDB key lives in a private file on this Mac, never in the code.
+KEY_FILE="$HOME/.config/control/tmdb_key"
+DEFINES=()
+if [ -s "$KEY_FILE" ]; then
+  DEFINES=(--dart-define=TMDB_KEY="$(tr -d '[:space:]' < "$KEY_FILE")")
+else
+  echo "Note: no TMDB key in $KEY_FILE, so Home will use Overseerr for trending."
+fi
+
 echo "== Preparing the project (flutter pub get)…"
 flutter pub get || { echo "pub get failed"; read -k1 "?Press any key to close"; exit 1; }
 
@@ -24,7 +33,7 @@ fi
 echo "== Found iPhone: $DEVICE"
 
 echo "== Building and installing (first build takes a few minutes)…"
-if ! flutter run --release -d "$DEVICE"; then
+if ! flutter run --release -d "$DEVICE" "${DEFINES[@]}"; then
   echo ""
   echo "Install failed. If the error mentions signing or a development team:"
   echo "  Xcode is opening now -> click Runner -> Signing & Capabilities ->"

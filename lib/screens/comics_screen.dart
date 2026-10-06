@@ -78,7 +78,7 @@ class _ComicsScreenState extends State<ComicsScreen> {
         appBar: AppBar(title: const Text('Comics')),
         body: NoServersView(
           what: 'Comicarr',
-          onAdd: () => addServer(context, group: ServiceGroup.other),
+          onAdd: () => addServer(context, group: ServiceGroup.library),
         ),
       );
     }

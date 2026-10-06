@@ -190,7 +190,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             leading: const Icon(Icons.add),
             title: const Text('Use your own ntfy server'),
             subtitle: const Text('Add it under Servers, then pick it here'),
-            onTap: () => addServer(context, group: ServiceGroup.other),
+            onTap: () => addServer(context, group: ServiceGroup.notifications),
           ),
           const SectionHeader('Your topic'),
           ListTile(

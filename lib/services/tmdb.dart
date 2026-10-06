@@ -1,12 +1,29 @@
+import '../models/server.dart';
 import 'overseerr.dart';
 import 'service_client.dart';
 
 export 'overseerr.dart' show DiscoverFeed, DiscoverResult;
 
+/// The app's own TMDB key, put in at build time (`--dart-define=TMDB_KEY=…`
+/// from a CI secret or a private file on the build Mac), so it's never in
+/// the source. Empty in builds without it.
+const builtInTmdbKey = String.fromEnvironment('TMDB_KEY');
+
+/// TMDB with the built-in key, or null when the build has none.
+final ServerConfig? builtInTmdb = builtInTmdbKey.isEmpty
+    ? null
+    : ServerConfig(
+        id: 'tmdb.builtin',
+        kind: ServiceKind.tmdb,
+        name: 'TMDB',
+        remoteUrl: TmdbClient.defaultUrl,
+        apiKey: builtInTmdbKey,
+      );
+
 /// The Movie Database, for the trending banner and the popular and
-/// upcoming rows. Each user brings their own free key (themoviedb.org,
-/// Settings → API): either the short "API key" or the long "API Read Access
-/// Token" works.
+/// upcoming rows. Uses the built-in key, or a user's own free key
+/// (themoviedb.org, Settings → API): the short "API key" and the long "API
+/// Read Access Token" both work.
 class TmdbClient extends ServiceClient {
   TmdbClient(super.server, {super.httpClient});
 

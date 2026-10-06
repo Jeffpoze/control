@@ -6,7 +6,10 @@ echo "== Flutter: $(flutter --version 2>/dev/null | head -1)"
 open -a Simulator
 # wait for a booted simulator
 for i in {1..30}; do xcrun simctl list devices booted | grep -q Booted && break; sleep 2; done
+KEY_FILE="$HOME/.config/control/tmdb_key"
+DEFINES=()
+[ -s "$KEY_FILE" ] && DEFINES=(--dart-define=TMDB_KEY="$(tr -d '[:space:]' < "$KEY_FILE")")
 flutter pub get
 flutter analyze
 flutter test
-flutter run -d "$(xcrun simctl list devices booted | grep -m1 Booted | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')"
+flutter run "${DEFINES[@]}" -d "$(xcrun simctl list devices booted | grep -m1 Booted | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')"

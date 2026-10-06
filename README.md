@@ -24,8 +24,8 @@ Control talks to your servers directly, at home or away. There's no account, no 
 | --- | --- |
 | **Home** | A swiping banner of what's trending today, with artwork and ratings. A "Now downloading" strip showing what Sonarr, Radarr and Lidarr are grabbing, with progress and time left. Live speed and queue for each download client, who's watching right now, requests waiting for approval, what's coming up this week, and rows of popular and upcoming movies and shows. Tap any title to request it. |
 | **Downloads** | Queue and history for every download client. Pause and resume one item or everything, delete with or without files, and add an NZB, torrent or magnet link. Refreshes every 3 seconds. |
-| **Media** | Sonarr, Radarr and Lidarr libraries as posters or a list, filtered by monitored, missing or unmonitored. Detail pages to monitor, search, refresh or delete, with seasons and episodes for series. Add new series, movies or artists with your root folders and quality, language and metadata profiles. The download queue, with blocklisting. |
-| **Calendar** | Upcoming episodes, movie releases and albums from all your library managers, grouped by day. |
+| **Media** | TV, Movies and Music (Sonarr, Radarr, Lidarr) as posters or a list, filtered by monitored, missing or unmonitored. Detail pages to monitor, search automatically or choose the exact release to download, refresh or delete, with seasons and episodes for series. Edit any title: quality profile, folder (moving the files), language or metadata profile, series type, season folders, minimum availability. Add new series, movies or artists. The download queue, with blocklisting. |
+| **Calendar** | Upcoming episodes, movie releases and albums from all your library managers, grouped by day. Tap one to open its page, with every setting and download option. |
 | **More** | Search every indexer through Prowlarr, then grab through Prowlarr or send the release to any download client. Approve or decline requests, and search for something new to request. See what's playing on Plex, Emby and Jellyfin, and long-press to stop a stream. Tracearr stats: plays and watch time today, rule alerts and play history. Bazarr subtitles: what's missing, search one language or everything, and history. Comicarr: your comics library, wanted issues and this week's releases, with search, pause and add. Notifications setup. Server setup. |
 
 ### Servers
@@ -35,6 +35,7 @@ Control talks to your servers directly, at home or away. There's no account, no 
 - **URL bases** such as `http://nas:8989/sonarr`.
 - **Reverse proxy basic auth** in front of any service.
 - **Custom headers** per server, for Cloudflare Access service tokens, Authelia and the like.
+- Servers are grouped by what they do (media servers, download clients, TV and movie apps, subtitles and comics, indexers, requests, notifications), each with its own add button.
 - **Test connection** checks each address on its own and says what's wrong.
 - API keys, passwords and headers are kept in the **iOS Keychain** or **Android's encrypted storage**, never in plain preferences.
 
@@ -51,9 +52,13 @@ This works on anyone's server without any setup on their side beyond the apps th
 
 ### Trending and popular
 
-The Home banner and rows come from [TMDB](https://www.themoviedb.org) when you add it as a server with your own free key (themoviedb.org, Settings, API). Without TMDB they come from Overseerr's Discover lists. Either way, tapping a title shows whether you already have it and lets you request it through Overseerr.
+Home opens on what's trending today, from [TMDB](https://www.themoviedb.org), for everyone, even before adding a server. Builds made by this repository's CI include the app's TMDB key from a repository secret; it is never in the source. You can also add TMDB under Servers with your own free key, which then takes over. A build without any key falls back to Overseerr's Discover lists. Tapping a title shows whether you already have it and lets you request it through Overseerr.
 
 This product uses the TMDB API but is not endorsed or certified by TMDB.
+
+### Your setup is kept
+
+Servers, keys and settings stay on the phone across updates. On iPhone they're kept in the Keychain, which also survives deleting and reinstalling the app. Android updates install over the previous version because every release is signed with the same key. To move your setup to another phone, use **Servers, Copy a backup** there and **Restore from a copied backup** on the new one.
 
 ## Install
 

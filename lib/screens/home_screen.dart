@@ -55,6 +55,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    _builtInTmdb?.close();
     _timer?.cancel();
     super.dispose();
   }
@@ -73,13 +74,19 @@ class _HomeScreenState extends State<HomeScreen> {
     return s == null ? null : store.client<OverseerrClient>(s);
   }
 
-  /// Trending and popular lists come from TMDB when a TMDB key is set up
-  /// (trending today), otherwise from Overseerr's Discover lists.
+  /// The app's built-in TMDB client, when this build has a key.
+  late final TmdbClient? _builtInTmdb = builtInTmdb == null
+      ? null
+      : TmdbClient(builtInTmdb!);
+
+  /// Trending and popular lists come from TMDB (trending today): the user's
+  /// own key if they added one, else the app's built-in key. Without either
+  /// they come from Overseerr's Discover lists.
   Future<void> _loadDiscover() async {
     final store = context.read<ServerStore>();
     final tmdbServer = store.ofKinds({ServiceKind.tmdb}).firstOrNull;
     final tmdb = tmdbServer == null
-        ? null
+        ? _builtInTmdb
         : store.client<TmdbClient>(tmdbServer);
     final overseerr = _overseerr(store);
     if (tmdb == null && overseerr == null) return;
@@ -213,9 +220,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Control')),
-      body: store.servers.isEmpty
-          ? _Welcome(onAdd: () => addServer(context))
-          : RefreshIndicator(
+      body: RefreshIndicator(
               onRefresh: _loadAll,
               child: ListView(
                 padding: const EdgeInsets.only(bottom: 32),
@@ -227,6 +232,11 @@ class _HomeScreenState extends State<HomeScreen> {
                       onTap: _openDiscover,
                     ),
                   ],
+                  if (store.servers.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 24),
+                      child: _Welcome(onAdd: () => addServer(context)),
+                    ),
                   if (_active.isNotEmpty) ...[
                     SectionHeader('Now downloading · ${_active.length}'),
                     NowDownloadingStrip(items: _active, onTap: _openQueue),
@@ -427,7 +437,7 @@ class _Welcome extends StatelessWidget {
         'Manage your download clients, Sonarr, Radarr, Lidarr, Bazarr, '
         'Prowlarr, Overseerr, Comicarr, Tautulli, Tracearr, Emby and Jellyfin '
         'from one place. '
-        'Start by adding a server.',
+        'Connect your first server to see your downloads and library here.',
     action: FilledButton.icon(
       onPressed: onAdd,
       icon: const Icon(Icons.add),

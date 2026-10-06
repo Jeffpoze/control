@@ -47,6 +47,10 @@ class ServerStore extends ChangeNotifier {
   static const _prefsKey = 'servers.v1';
   static const _notifyKey = 'notify.v1';
 
+  /// The server list is also kept in secure storage. On iPhone the Keychain
+  /// survives deleting and reinstalling the app, so the setup comes back.
+  static const _listKey = 'servers.list.v1';
+
   final SecretStore _secrets;
   final Map<String, ServiceClient> _clients = {};
   List<ServerConfig> _servers = [];
@@ -74,7 +78,8 @@ class ServerStore extends ChangeNotifier {
 
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_prefsKey);
+    final kept = await _secrets.read(_listKey);
+    final raw = kept ?? prefs.getString(_prefsKey);
     final list = <ServerConfig>[];
     if (raw != null) {
       for (final item in jsonDecode(raw) as List) {
@@ -88,6 +93,8 @@ class ServerStore extends ChangeNotifier {
       }
     }
     _servers = list;
+    // First run with this version: copy the list into secure storage too.
+    if (kept == null && list.isNotEmpty) await _persist();
     final notifyRaw = await _secrets.read(_notifyKey);
     if (notifyRaw != null) {
       notify = NotifySettings.fromJson(
@@ -133,11 +140,58 @@ class ServerStore extends ChangeNotifier {
   }
 
   Future<void> _persist() async {
+    final list = jsonEncode(_servers.map((s) => s.toJson()).toList());
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      _prefsKey,
-      jsonEncode(_servers.map((s) => s.toJson()).toList()),
-    );
+    await prefs.setString(_prefsKey, list);
+    await _secrets.write(_listKey, list);
+  }
+
+  /// Every server with its keys and passwords, and the notification
+  /// settings, as text to keep somewhere safe or move to another phone.
+  String exportBackup() => const JsonEncoder.withIndent('  ').convert({
+    'app': 'Control',
+    'version': 1,
+    'servers': [
+      for (final s in _servers) {...s.toJson(), 'secrets': s.secretsJson()},
+    ],
+    if (notify != null) 'notify': notify!.toJson(),
+  });
+
+  /// Reads a backup made by [exportBackup]. Throws [FormatException] with a
+  /// message fit to show when the text isn't one.
+  static (List<ServerConfig>, NotifySettings?) parseBackup(String text) {
+    Object? json;
+    try {
+      json = jsonDecode(text.trim());
+    } on FormatException {
+      throw const FormatException('That isn\'t a Control backup.');
+    }
+    if (json is! Map || json['app'] != 'Control' || json['servers'] is! List) {
+      throw const FormatException('That isn\'t a Control backup.');
+    }
+    final servers = <ServerConfig>[
+      for (final item in json['servers'] as List)
+        if (item is Map)
+          ?ServerConfig.fromJson(
+            item.cast<String, dynamic>(),
+            ((item['secrets'] as Map?) ?? const {}).cast<String, dynamic>(),
+          ),
+    ];
+    final notify = json['notify'] is Map
+        ? NotifySettings.fromJson((json['notify'] as Map).cast())
+        : null;
+    return (servers, notify);
+  }
+
+  /// Adds the servers from a backup; ones with the same id are replaced.
+  /// Returns how many were restored.
+  Future<int> importBackup(String text) async {
+    final (servers, notifySettings) = parseBackup(text);
+    for (final s in servers) {
+      await save(s);
+    }
+    if (notifySettings != null) await saveNotify(notifySettings);
+    return servers.length;
   }
 
   static String newId() =>

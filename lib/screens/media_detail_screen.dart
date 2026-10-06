@@ -4,6 +4,8 @@ import '../models/server.dart';
 import '../services/arr.dart';
 import '../util/format.dart';
 import '../widgets/common.dart';
+import 'media_edit_screen.dart';
+import 'release_search_screen.dart';
 
 class MediaDetailScreen extends StatefulWidget {
   const MediaDetailScreen({
@@ -46,6 +48,36 @@ class _MediaDetailScreenState extends State<MediaDetailScreen> {
       }
     }
   }
+
+  Future<void> _editItem() async {
+    final updated = await Navigator.of(context).push<MediaItem>(
+      MaterialPageRoute(
+        builder: (_) => MediaEditScreen(client: client, item: _item),
+      ),
+    );
+    if (updated != null && mounted) {
+      setState(() => _item = updated);
+      showMessage(context, 'Saved');
+    }
+  }
+
+  void _chooseRelease({
+    int? movieId,
+    int? episodeId,
+    int? seasonNumber,
+    String? title,
+  }) => Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (_) => ReleaseSearchScreen(
+        client: client,
+        title: title ?? _item.title,
+        movieId: movieId,
+        episodeId: episodeId,
+        seriesId: seasonNumber == null ? null : _item.id,
+        seasonNumber: seasonNumber,
+      ),
+    ),
+  );
 
   Future<void> _toggleMonitored() async {
     await runAction(context, () async {
@@ -140,6 +172,11 @@ class _MediaDetailScreenState extends State<MediaDetailScreen> {
                       ),
                     ),
               actions: [
+                IconButton(
+                  tooltip: 'Edit',
+                  icon: const Icon(Icons.tune),
+                  onPressed: _editItem,
+                ),
                 IconButton(
                   tooltip: item.monitored ? 'Stop monitoring' : 'Monitor',
                   icon: Icon(
@@ -242,6 +279,14 @@ class _MediaDetailScreenState extends State<MediaDetailScreen> {
                                   : 'Search for missing',
                             ),
                           ),
+                          if (client.kind == ServiceKind.radarr) ...[
+                            const SizedBox(height: 8),
+                            OutlinedButton.icon(
+                              onPressed: () => _chooseRelease(movieId: item.id),
+                              icon: const Icon(Icons.manage_search),
+                              label: const Text('Choose a release'),
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -325,6 +370,13 @@ class _MediaDetailScreenState extends State<MediaDetailScreen> {
                     ..sort((a, b) => b.number.compareTo(a.number)),
               client: client,
               seriesId: _item.id,
+              onChooseRelease: (season, episode) => _chooseRelease(
+                seasonNumber: episode == null ? season : null,
+                episodeId: episode?.id,
+                title: episode == null
+                    ? '${_item.title} · Season $season'
+                    : '${_item.title} · ${episode.code}',
+              ),
               onToggleSeason: (monitored) => runAction(context, () async {
                 final updated = await client.setSeasonMonitored(
                   _item,
@@ -353,6 +405,7 @@ class _SeasonTile extends StatelessWidget {
     required this.seriesId,
     required this.onToggleSeason,
     required this.onChanged,
+    required this.onChooseRelease,
   });
 
   final Map<String, dynamic> season;
@@ -361,6 +414,9 @@ class _SeasonTile extends StatelessWidget {
   final int seriesId;
   final ValueChanged<bool> onToggleSeason;
   final Future<void> Function() onChanged;
+
+  /// Interactive search for the season (episode null) or one episode.
+  final void Function(int season, Episode? episode) onChooseRelease;
 
   @override
   Widget build(BuildContext context) {
@@ -382,19 +438,30 @@ class _SeasonTile extends StatelessWidget {
         ),
         onPressed: () => onToggleSeason(!monitored),
       ),
-      trailing: IconButton(
-        tooltip: 'Search season',
-        icon: const Icon(Icons.search),
-        onPressed: () => runAction(
-          context,
-          () => client.searchSeason(seriesId, number),
-          done: 'Searching season $number',
-        ),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            tooltip: 'Choose a release for this season',
+            icon: const Icon(Icons.manage_search),
+            onPressed: () => onChooseRelease(number, null),
+          ),
+          IconButton(
+            tooltip: 'Search season',
+            icon: const Icon(Icons.search),
+            onPressed: () => runAction(
+              context,
+              () => client.searchSeason(seriesId, number),
+              done: 'Searching season $number',
+            ),
+          ),
+        ],
       ),
       children: [
         for (final e in episodes)
           ListTile(
             dense: true,
+            onLongPress: () => onChooseRelease(number, e),
             leading: Icon(
               e.hasFile
                   ? Icons.check_circle
@@ -432,6 +499,12 @@ class _SeasonTile extends StatelessWidget {
                       await onChanged();
                     }
                   },
+                ),
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  tooltip: 'Choose a release',
+                  icon: const Icon(Icons.manage_search, size: 20),
+                  onPressed: () => onChooseRelease(number, e),
                 ),
                 IconButton(
                   visualDensity: VisualDensity.compact,

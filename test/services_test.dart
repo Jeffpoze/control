@@ -1376,4 +1376,129 @@ void main() {
       expect(r.canRequest, isFalse);
     });
   });
+
+  group('Editing and choosing releases', () {
+    MediaItem series(Map<String, dynamic> raw) =>
+        ArrClient(server(ServiceKind.sonarr)).toMedia(raw);
+
+    test('edit starts from what the *arr has', () {
+      final e = MediaEdit.of(
+        series({
+          'id': 1,
+          'title': 'Severance',
+          'monitored': true,
+          'qualityProfileId': 4,
+          'languageProfileId': 1,
+          'seriesType': 'standard',
+          'seasonFolder': true,
+          'path': '/tv/Severance',
+        }),
+      );
+      expect(e.rootFolderPath, '/tv');
+      expect(e.qualityProfileId, 4);
+      expect(e.languageProfileId, 1);
+      expect(e.seriesType, 'standard');
+      expect(e.minimumAvailability, isNull);
+    });
+
+    test('changing the folder moves the item into it', () {
+      final item = series({
+        'id': 1,
+        'title': 'Severance',
+        'qualityProfileId': 4,
+        'path': '/tv/Severance',
+        'rootFolderPath': '/tv/',
+      });
+      final e = MediaEdit.of(item)
+        ..rootFolderPath = '/tv4k'
+        ..qualityProfileId = 7
+        ..monitored = false;
+      final body = ArrClient.editBody(item, e);
+      expect(body['path'], '/tv4k/Severance');
+      expect(body['rootFolderPath'], '/tv4k');
+      expect(body['qualityProfileId'], 7);
+      expect(body['monitored'], isFalse);
+      expect(body['title'], 'Severance');
+
+      final same = ArrClient.editBody(item, MediaEdit.of(item));
+      expect(same['path'], '/tv/Severance');
+    });
+
+    test('Windows paths', () {
+      expect(MediaEdit.parentOf(r'D:\Movies\Dune (2021)'), r'D:\Movies');
+      expect(MediaEdit.folderOf(r'D:\Movies\Dune (2021)\'), 'Dune (2021)');
+    });
+
+    test('saving sends moveFiles only when the folder changed', () async {
+      final item = ArrClient(server(ServiceKind.radarr)).toMedia({
+        'id': 9,
+        'title': 'Dune',
+        'qualityProfileId': 1,
+        'minimumAvailability': 'released',
+        'path': '/movies/Dune',
+      });
+      final c = ArrClient(
+        server(ServiceKind.radarr),
+        httpClient: MockClient((req) async {
+          expect(req.method, 'PUT');
+          expect(req.url.path, '/api/v3/movie/9');
+          expect(req.url.queryParameters['moveFiles'], 'true');
+          final body = jsonDecode(req.body) as Map;
+          expect(body['minimumAvailability'], 'inCinemas');
+          return json(body);
+        }),
+      );
+      final e = MediaEdit.of(item)
+        ..rootFolderPath = '/movies-4k'
+        ..minimumAvailability = 'inCinemas';
+      final updated = await c.update(item, e);
+      expect(updated.raw['path'], '/movies-4k/Dune');
+    });
+
+    test('releases: approved first, then score, then size', () {
+      final sorted = ArrClient.sortReleases([
+        ArrRelease({'title': 'rejected', 'rejected': true, 'customFormatScore': 900}),
+        ArrRelease({'title': 'small', 'customFormatScore': 100, 'size': 1}),
+        ArrRelease({'title': 'big', 'customFormatScore': 100, 'size': 9}),
+        ArrRelease({'title': 'best', 'customFormatScore': 500}),
+      ]);
+      expect(sorted.map((r) => r.title), ['best', 'big', 'small', 'rejected']);
+    });
+
+    test('grab sends the guid and indexer', () async {
+      final c = ArrClient(
+        server(ServiceKind.sonarr),
+        httpClient: MockClient((req) async {
+          expect(req.method, 'POST');
+          expect(req.url.path, '/api/v3/release');
+          expect(jsonDecode(req.body), {'guid': 'g1', 'indexerId': 3});
+          return json({});
+        }),
+      );
+      await c.grab(ArrRelease({'guid': 'g1', 'indexerId': 3}));
+    });
+
+    test('calendar entries know which series to open', () async {
+      final c = ArrClient(
+        server(ServiceKind.sonarr),
+        httpClient: MockClient(
+          (_) async => json([
+            {
+              'seriesId': 42,
+              'seasonNumber': 1,
+              'episodeNumber': 2,
+              'title': 'Half Loop',
+              'airDateUtc': '2026-10-06T01:00:00Z',
+              'series': {'title': 'Severance'},
+            },
+          ]),
+        ),
+      );
+      final entries = await c.calendar(
+        DateTime.utc(2026, 10, 5),
+        DateTime.utc(2026, 10, 12),
+      );
+      expect(entries.single.mediaId, 42);
+    });
+  });
 }

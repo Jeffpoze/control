@@ -59,7 +59,7 @@ class _RequestsScreenState extends State<RequestsScreen> {
         appBar: AppBar(title: const Text('Requests')),
         body: NoServersView(
           what: 'Overseerr or Jellyseerr',
-          onAdd: () => addServer(context, group: ServiceGroup.other),
+          onAdd: () => addServer(context, group: ServiceGroup.requests),
         ),
       );
     }

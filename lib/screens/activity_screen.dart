@@ -69,7 +69,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
       body: servers.isEmpty
           ? NoServersView(
               what: 'Tautulli, Emby or Jellyfin',
-              onAdd: () => addServer(context, group: ServiceGroup.other),
+              onAdd: () => addServer(context, group: ServiceGroup.mediaServer),
             )
           : !_loaded
           ? const Center(child: CircularProgressIndicator())
