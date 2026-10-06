@@ -34,7 +34,13 @@ jobs:
           else
             echo "::warning::No ANDROID_KEYSTORE secret: this APK is signed with a throwaway key and won't install over the previous one."
           fi
-      - run: flutter build apk --release --dart-define=TMDB_KEY="$TMDB_KEY"
+      # Each release gets its own number (1.0.N, build N) from the run count,
+      # so testers can see which build they have in Android's app info.
+      - run: >
+          flutter build apk --release
+          --build-name="1.0.${{ github.run_number }}"
+          --build-number="${{ github.run_number }}"
+          --dart-define=TMDB_KEY="$TMDB_KEY"
         env:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           # The app's TMDB key comes from a repository secret, never the code.
@@ -52,3 +58,5 @@ jobs:
               --notes "Built automatically from main. Download control.apk on your Android phone and open it to install. Android asks once to allow installs from your browser or file manager."
           fi
           gh release upload android-latest control.apk --clobber
+          gh release edit android-latest \
+            --title "Control for Android (build ${{ github.run_number }})"
