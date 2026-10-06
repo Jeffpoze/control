@@ -15,6 +15,7 @@ import 'package:control/services/qbittorrent.dart';
 import 'package:control/services/sabnzbd.dart';
 import 'package:control/services/service_client.dart';
 import 'package:control/services/tautulli.dart';
+import 'package:control/services/tmdb.dart';
 import 'package:control/services/tracearr.dart';
 import 'package:control/services/transmission.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -1276,6 +1277,88 @@ void main() {
         'GET /api/series/1/search-missing/preview',
         'POST /api/series/1/search-missing',
       ]);
+    });
+  });
+
+  group('TMDB', () {
+    test('trending today, in the same shape as Overseerr', () async {
+      final c = TmdbClient(
+        server(ServiceKind.tmdb, local: '', remote: TmdbClient.defaultUrl, apiKey: 'shortkey'),
+        httpClient: MockClient((req) async {
+          expect(req.url.host, 'api.themoviedb.org');
+          expect(req.url.path, '/3/trending/all/day');
+          expect(req.url.queryParameters['api_key'], 'shortkey');
+          expect(req.headers.containsKey('Authorization'), isFalse);
+          return json({
+            'results': [
+              {
+                'id': 1,
+                'media_type': 'movie',
+                'title': 'Film',
+                'backdrop_path': '/b.jpg',
+                'poster_path': '/p.jpg',
+                'vote_average': 7.5,
+                'release_date': '2026-09-30',
+              },
+              {'id': 2, 'media_type': 'person', 'name': 'Someone'},
+              {'id': 3, 'media_type': 'tv', 'name': 'Show', 'first_air_date': '2025-01-01'},
+            ],
+          });
+        }),
+      );
+      final items = await c.discover(DiscoverFeed.trending);
+      expect(items.map((i) => i.title), ['Film', 'Show']);
+      expect(items.first.backdropUrl, 'https://image.tmdb.org/t/p/w1280/b.jpg');
+      expect(items.first.rating, 7.5);
+      expect(items.first.year, 2026);
+      expect(items.first.canRequest, isTrue);
+      expect(items.last.isTv, isTrue);
+    });
+
+    test('read access token goes in the Authorization header', () async {
+      final token = 'eyJ${'a' * 60}';
+      final c = TmdbClient(
+        server(ServiceKind.tmdb, local: '', remote: TmdbClient.defaultUrl, apiKey: token),
+        httpClient: MockClient((req) async {
+          expect(req.headers['Authorization'], 'Bearer $token');
+          expect(req.url.queryParameters.containsKey('api_key'), isFalse);
+          expect(req.url.path, '/3/movie/popular');
+          return json({
+            'results': [
+              {'id': 5, 'title': 'No type given'},
+            ],
+          });
+        }),
+      );
+      final items = await c.discover(DiscoverFeed.popularMovies);
+      expect(items.single.mediaType, 'movie');
+    });
+
+    test('feeds map to TMDB lists', () {
+      expect(TmdbClient.pathFor(DiscoverFeed.upcomingTv), '/3/tv/on_the_air');
+      expect(TmdbClient.pathFor(DiscoverFeed.popularTv), '/3/tv/popular');
+    });
+
+    test('Overseerr fills in availability for a TMDB title', () async {
+      final c = OverseerrClient(
+        server(ServiceKind.overseerr),
+        httpClient: MockClient((req) async {
+          expect(req.url.path, '/api/v1/tv/3');
+          return json({
+            'name': 'Show',
+            'mediaInfo': {'status': 5},
+          });
+        }),
+      );
+      final r = await c.withStatus(
+        TmdbClient.parse({
+          'results': [
+            {'id': 3, 'media_type': 'tv', 'name': 'Show'},
+          ],
+        }).single,
+      );
+      expect(r.availabilityLabel, 'Available');
+      expect(r.canRequest, isFalse);
     });
   });
 }

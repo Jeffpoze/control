@@ -8,6 +8,9 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
     steps:
       - uses: actions/checkout@v5
       - uses: subosito/flutter-action@v2
@@ -18,9 +21,11 @@ jobs:
       - name: Format
         id: format
         continue-on-error: true
-        # A formatting miss fails the job with the exact fix attached as a
-        # patch (in the run's annotations), so it can be applied with
-        # `git apply` without running the formatter locally.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # A formatting miss fails the job and attaches the exact fix as a
+        # "format-patch" check, so it can be applied with `git apply`
+        # without running the formatter locally.
         run: |
           dart format lib test > /dev/null
           if git diff --quiet; then exit 0; fi
@@ -29,11 +34,30 @@ jobs:
           done
           git diff > format.patch
           python3 - <<'PY'
-          text = open('format.patch').read()
-          chunk = 40000
-          for i in range(0, len(text), chunk):
-              part = text[i:i + chunk].replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
-              print(f'::notice title=format.patch {i // chunk + 1}::{part}')
+          import json, os, urllib.request
+          body = {
+              'name': 'format-patch',
+              'head_sha': os.environ['GITHUB_SHA'],
+              'status': 'completed',
+              'conclusion': 'neutral',
+              'output': {
+                  'title': 'Apply with: git apply',
+                  'summary': 'dart format changes for this commit',
+                  'text': open('format.patch').read()[:65000],
+              },
+          }
+          req = urllib.request.Request(
+              f"{os.environ['GITHUB_API_URL']}/repos/{os.environ['GITHUB_REPOSITORY']}/check-runs",
+              data=json.dumps(body).encode(),
+              headers={
+                  'Authorization': f"Bearer {os.environ['GH_TOKEN']}",
+                  'Accept': 'application/vnd.github+json',
+              },
+          )
+          try:
+              urllib.request.urlopen(req)
+          except Exception as e:
+              print('Could not attach the patch:', e)
           PY
           exit 1
       - name: Analyze

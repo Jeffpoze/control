@@ -101,6 +101,7 @@ enum ServiceKind {
     3000,
     Icons.query_stats,
   ),
+  tmdb('TMDB', ServiceGroup.other, AuthStyle.apiKey, 443, Icons.local_movies_outlined),
   ntfy(
     'ntfy',
     ServiceGroup.other,
@@ -158,6 +159,8 @@ enum ServiceKind {
     ServiceKind.jellyfin => 'Dashboard → API Keys → +',
     ServiceKind.tracearr => 'Settings → General → API key (starts with trr_pub_)',
     ServiceKind.ntfy => 'Only if your ntfy server requires login (tk_…)',
+    ServiceKind.tmdb =>
+      'Free at themoviedb.org → Settings → API. The API key or the Read Access Token both work.',
     _ => 'Settings → General → Security → API Key',
   };
 }

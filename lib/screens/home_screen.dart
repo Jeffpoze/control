@@ -7,6 +7,7 @@ import '../models/server.dart';
 import '../services/arr.dart';
 import '../services/download_client.dart';
 import '../services/overseerr.dart';
+import '../services/tmdb.dart';
 import '../services/streaming.dart';
 import '../state/nav_state.dart';
 import '../state/server_store.dart';
@@ -72,13 +73,22 @@ class _HomeScreenState extends State<HomeScreen> {
     return s == null ? null : store.client<OverseerrClient>(s);
   }
 
+  /// Trending and popular lists come from TMDB when a TMDB key is set up
+  /// (trending today), otherwise from Overseerr's Discover lists.
   Future<void> _loadDiscover() async {
-    final client = _overseerr(context.read<ServerStore>());
-    if (client == null) return;
+    final store = context.read<ServerStore>();
+    final tmdbServer = store.ofKinds({ServiceKind.tmdb}).firstOrNull;
+    final tmdb = tmdbServer == null
+        ? null
+        : store.client<TmdbClient>(tmdbServer);
+    final overseerr = _overseerr(store);
+    if (tmdb == null && overseerr == null) return;
     await Future.wait(
       DiscoverFeed.values.map((feed) async {
         try {
-          final items = await client.discover(feed);
+          final items = tmdb != null
+              ? await tmdb.discover(feed)
+              : await overseerr!.discover(feed);
           if (mounted) setState(() => _feeds[feed] = items);
         } catch (_) {
           // Discover is a nice-to-have; the requests card shows real errors.
@@ -112,7 +122,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _openDiscover(DiscoverResult r) async {
     final client = _overseerr(context.read<ServerStore>());
-    if (client == null) return;
     final requested = await showDiscoverSheet(context, client, r);
     if (requested && mounted) {
       _loadDiscover();

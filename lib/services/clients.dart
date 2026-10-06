@@ -13,6 +13,7 @@ import 'qbittorrent.dart';
 import 'sabnzbd.dart';
 import 'service_client.dart';
 import 'tautulli.dart';
+import 'tmdb.dart';
 import 'tracearr.dart';
 import 'transmission.dart';
 
@@ -42,4 +43,5 @@ ServiceClient createClient(ServerConfig server, {http.Client? httpClient}) =>
       ServiceKind.comicarr => ComicarrClient(server, httpClient: httpClient),
       ServiceKind.tracearr => TracearrClient(server, httpClient: httpClient),
       ServiceKind.ntfy => NtfyClient(server, httpClient: httpClient),
+      ServiceKind.tmdb => TmdbClient(server, httpClient: httpClient),
     };

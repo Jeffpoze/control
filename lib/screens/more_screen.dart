@@ -79,6 +79,11 @@ class MoreScreen extends StatelessWidget {
               Text(
                 'Control your usenet, torrent and media servers from your phone.',
               ),
+              SizedBox(height: 12),
+              Text(
+                'This product uses the TMDB API but is not endorsed or '
+                'certified by TMDB.',
+              ),
             ],
           ),
         ],

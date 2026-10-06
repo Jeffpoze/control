@@ -14,7 +14,7 @@ Control talks to your servers directly, at home or away. There's no account, no 
 | Library managers | Sonarr, Radarr, Lidarr, Comicarr |
 | Subtitles | Bazarr |
 | Indexers | Prowlarr |
-| Requests and discovery | Overseerr, Jellyseerr, Seerr |
+| Requests and discovery | Overseerr, Jellyseerr, Seerr, TMDB |
 | Now playing and stats | Plex (through Tautulli), Emby, Jellyfin, Tracearr |
 | Notifications | ntfy (the public ntfy.sh or your own server) |
 
@@ -22,7 +22,7 @@ Control talks to your servers directly, at home or away. There's no account, no 
 
 | Tab | What you get |
 | --- | --- |
-| **Home** | A swiping banner of what's trending, with artwork and ratings. A "Now downloading" strip showing what Sonarr, Radarr and Lidarr are grabbing, with progress and time left. Live speed and queue for each download client, who's watching right now, requests waiting for approval, what's coming up this week, and rows of popular and upcoming movies and shows. Tap any title to request it. |
+| **Home** | A swiping banner of what's trending today, with artwork and ratings. A "Now downloading" strip showing what Sonarr, Radarr and Lidarr are grabbing, with progress and time left. Live speed and queue for each download client, who's watching right now, requests waiting for approval, what's coming up this week, and rows of popular and upcoming movies and shows. Tap any title to request it. |
 | **Downloads** | Queue and history for every download client. Pause and resume one item or everything, delete with or without files, and add an NZB, torrent or magnet link. Refreshes every 3 seconds. |
 | **Media** | Sonarr, Radarr and Lidarr libraries as posters or a list, filtered by monitored, missing or unmonitored. Detail pages to monitor, search, refresh or delete, with seasons and episodes for series. Add new series, movies or artists with your root folders and quality, language and metadata profiles. The download queue, with blocklisting. |
 | **Calendar** | Upcoming episodes, movie releases and albums from all your library managers, grouped by day. |
@@ -48,6 +48,12 @@ Phones don't let apps check servers in the background, so Control has your own a
 4. Install the free ntfy app and tap **Open in ntfy** to subscribe. **Send a test** checks it all works.
 
 This works on anyone's server without any setup on their side beyond the apps they already run.
+
+### Trending and popular
+
+The Home banner and rows come from [TMDB](https://www.themoviedb.org) when you add it as a server with your own free key (themoviedb.org, Settings, API). Without TMDB they come from Overseerr's Discover lists. Either way, tapping a title shows whether you already have it and lets you request it through Overseerr.
+
+This product uses the TMDB API but is not endorsed or certified by TMDB.
 
 ## Install
 

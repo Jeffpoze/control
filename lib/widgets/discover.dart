@@ -449,11 +449,11 @@ class _ActiveCard extends StatelessWidget {
   };
 }
 
-/// Details for a trending or popular title, with a Request button.
-/// Returns true when a request was made.
+/// Details for a trending or popular title, with a Request button when
+/// Overseerr is set up. Returns true when a request was made.
 Future<bool> showDiscoverSheet(
   BuildContext context,
-  OverseerrClient client,
+  OverseerrClient? client,
   DiscoverResult r,
 ) async {
   final requested = await showModalBottomSheet<bool>(
@@ -468,7 +468,7 @@ Future<bool> showDiscoverSheet(
 
 class _DiscoverSheet extends StatefulWidget {
   const _DiscoverSheet({required this.client, required this.item});
-  final OverseerrClient client;
+  final OverseerrClient? client;
   final DiscoverResult item;
 
   @override
@@ -477,13 +477,35 @@ class _DiscoverSheet extends StatefulWidget {
 
 class _DiscoverSheetState extends State<_DiscoverSheet> {
   bool _busy = false;
+  late DiscoverResult _item = widget.item;
+
+  /// Titles straight from TMDB don't say whether they're already requested
+  /// or available, so ask Overseerr.
+  late bool _checking =
+      widget.client != null && widget.item.raw['mediaInfo'] == null;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_checking) _checkStatus();
+  }
+
+  Future<void> _checkStatus() async {
+    try {
+      final r = await widget.client!.withStatus(widget.item);
+      if (mounted) setState(() => _item = r);
+    } catch (_) {
+      // Unknown status: still offer the request; Overseerr will say if not.
+    }
+    if (mounted) setState(() => _checking = false);
+  }
 
   Future<void> _request() async {
     setState(() => _busy = true);
-    final r = widget.item;
+    final r = _item;
     final ok = await runAction(
       context,
-      () => widget.client.submitRequest(r),
+      () => widget.client!.submitRequest(r),
       done: 'Requested ${r.title}',
     );
     if (!mounted) return;
@@ -497,7 +519,7 @@ class _DiscoverSheetState extends State<_DiscoverSheet> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final r = widget.item;
+    final r = _item;
     return ConstrainedBox(
       constraints: BoxConstraints(
         maxHeight: MediaQuery.sizeOf(context).height * 0.85,
@@ -553,7 +575,18 @@ class _DiscoverSheetState extends State<_DiscoverSheet> {
                 16,
                 16 + MediaQuery.paddingOf(context).bottom,
               ),
-              child: r.canRequest
+              child: widget.client == null
+                  ? Text(
+                      'Add Overseerr or Jellyseerr under Servers to request '
+                      'titles from here.',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    )
+                  : _checking
+                  ? const Center(child: CircularProgressIndicator())
+                  : r.canRequest
                   ? FilledButton.icon(
                       onPressed: _busy ? null : _request,
                       icon: _busy
