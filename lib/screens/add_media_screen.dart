@@ -152,7 +152,13 @@ class _AddSheetState extends State<_AddSheet> {
   @override
   void initState() {
     super.initState();
-    _monitor = client.kind == ServiceKind.radarr ? 'movieOnly' : 'all';
+    // New shows only follow episodes from now on, so adding one doesn't
+    // pull in (or upgrade) its whole back catalogue.
+    _monitor = switch (client.kind) {
+      ServiceKind.radarr => 'movieOnly',
+      ServiceKind.sonarr => 'future',
+      _ => 'all',
+    };
     _loadOptions();
   }
 
