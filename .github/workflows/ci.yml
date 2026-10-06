@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: ['**']
   pull_request:
 
 jobs:
@@ -15,8 +15,30 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - run: dart format --output=none --set-exit-if-changed lib test
+      - name: Format
+        id: format
+        continue-on-error: true
+        # A formatting miss fails the job with the exact fix attached as a
+        # patch (in the run's annotations), so it can be applied with
+        # `git apply` without running the formatter locally.
+        run: |
+          dart format lib test > /dev/null
+          if git diff --quiet; then exit 0; fi
+          git diff --name-only | while read -r f; do
+            echo "::error file=$f,title=dart format::This file needs dart format"
+          done
+          git diff > format.patch
+          python3 - <<'PY'
+          text = open('format.patch').read()
+          chunk = 40000
+          for i in range(0, len(text), chunk):
+              part = text[i:i + chunk].replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+              print(f'::notice title=format.patch {i // chunk + 1}::{part}')
+          PY
+          exit 1
       - name: Analyze
+        id: analyze
+        continue-on-error: true
         # Machine output is turned into GitHub annotations so each issue
         # shows up on the commit and pull request, not just in the raw log.
         run: |
@@ -34,7 +56,10 @@ jobs:
           done < analyze.txt
           [ $code -eq 0 ] || cat analyze.txt
           exit $code
-      - run: flutter test
+      - run: flutter test --reporter github
+      - name: Format and analyze must pass
+        if: steps.format.outcome == 'failure' || steps.analyze.outcome == 'failure'
+        run: exit 1
 
   ios-build:
     runs-on: macos-latest

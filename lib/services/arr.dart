@@ -1,5 +1,6 @@
 import '../models/server.dart';
 import '../util/format.dart';
+import 'ntfy.dart';
 import 'service_client.dart';
 
 /// A series (Sonarr), movie (Radarr) or artist (Lidarr), as shown in lists.
@@ -520,6 +521,104 @@ class ArrClient extends ServiceClient {
     '$_v/queue/${item.id}',
     query: {'removeFromClient': '$removeFromClient', 'blocklist': '$blocklist'},
   );
+
+  // ---- Notifications ----
+
+  /// Name of the connection Control creates, so setting up again updates it.
+  static const notificationName = 'Control';
+
+  /// Adds (or updates) an ntfy connection under Settings → Connect.
+  Future<void> connectNtfy(NtfyTarget target, NotifyEvents events) async {
+    final schema = await getJson('$_v/notification/schema') as List;
+    final ntfy = schema
+        .cast<Map>()
+        .where((m) => m['implementation'] == 'Ntfy')
+        .firstOrNull;
+    if (ntfy == null) {
+      throw ApiException(
+        '${kind.label} on ${server.name} is too old to send ntfy notifications.',
+      );
+    }
+    final existing = (await getJson('$_v/notification') as List)
+        .cast<Map>()
+        .where(
+          (m) =>
+              m['implementation'] == 'Ntfy' && m['name'] == notificationName,
+        )
+        .firstOrNull;
+    final body = ntfyBody(
+      ntfy.cast(),
+      target,
+      events,
+      existingId: existing == null ? null : asInt(existing['id']),
+    );
+    if (existing == null) {
+      await sendJson('POST', '$_v/notification', json: body);
+    } else {
+      await sendJson('PUT', '$_v/notification/${body['id']}', json: body);
+    }
+  }
+
+  /// Fills in the ntfy template from `/notification/schema`. Only switches the
+  /// app reports as supported are turned on, so it works across Sonarr,
+  /// Radarr and Lidarr versions.
+  static Map<String, dynamic> ntfyBody(
+    Map<String, dynamic> schema,
+    NtfyTarget target,
+    NotifyEvents events, {
+    int? existingId,
+  }) {
+    final body = Map<String, dynamic>.of(schema)
+      ..['name'] = notificationName
+      ..remove('presets');
+    if (existingId != null) body['id'] = existingId;
+    body['fields'] = [
+      for (final f in (schema['fields'] as List? ?? const []))
+        if (f is Map)
+          {
+            ...f.cast<String, dynamic>(),
+            'value': switch (f['name']) {
+              'serverUrl' => target.publishUrl.toString(),
+              'accessToken' => target.token,
+              'topics' => [target.topic],
+              'priority' => 3,
+              _ => f['value'],
+            },
+          },
+    ];
+    const groups = {
+      'grabs': ['onGrab'],
+      'imports': [
+        'onDownload',
+        'onUpgrade',
+        'onImportComplete',
+        'onReleaseImport',
+        'onAlbumDownload',
+      ],
+      'problems': [
+        'onHealthIssue',
+        'onManualInteractionRequired',
+        'onDownloadFailure',
+        'onImportFailure',
+      ],
+    };
+    final wanted = {
+      'grabs': events.grabs,
+      'imports': events.imports,
+      'problems': events.problems,
+    };
+    for (final MapEntry(key: group, value: flags) in groups.entries) {
+      for (final flag in flags) {
+        if (!body.containsKey(flag)) continue;
+        final supports = 'supports${flag[0].toUpperCase()}${flag.substring(1)}';
+        body[flag] = wanted[group]! && body[supports] != false;
+      }
+    }
+    if (body.containsKey('includeHealthWarnings')) {
+      body['includeHealthWarnings'] = false;
+    }
+    return body;
+  }
 
   // ---- Calendar ----
 

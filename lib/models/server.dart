@@ -86,6 +86,27 @@ enum ServiceKind {
     AuthStyle.apiKey,
     6767,
     Icons.subtitles_outlined,
+  ),
+  comicarr(
+    'Comicarr',
+    ServiceGroup.other,
+    AuthStyle.login,
+    8090,
+    Icons.auto_stories_outlined,
+  ),
+  tracearr(
+    'Tracearr',
+    ServiceGroup.other,
+    AuthStyle.apiKey,
+    3000,
+    Icons.query_stats,
+  ),
+  ntfy(
+    'ntfy',
+    ServiceGroup.other,
+    AuthStyle.apiKey,
+    80,
+    Icons.notifications_outlined,
   );
 
   const ServiceKind(
@@ -109,9 +130,24 @@ enum ServiceKind {
   /// Servers that can say who's watching what.
   static const streaming = {
     ServiceKind.tautulli,
+    ServiceKind.tracearr,
     ServiceKind.emby,
     ServiceKind.jellyfin,
   };
+
+  /// Apps that can send ntfy notifications, and that Control can set up.
+  static const notifiers = {
+    ServiceKind.sonarr,
+    ServiceKind.radarr,
+    ServiceKind.lidarr,
+    ServiceKind.sabnzbd,
+  };
+
+  /// ntfy only needs a token when the server requires login.
+  bool get apiKeyOptional => this == ServiceKind.ntfy;
+
+  String get apiKeyLabel =>
+      this == ServiceKind.ntfy ? 'Access token (optional)' : 'API key';
 
   /// Where users find their API key, shown under the field.
   String get apiKeyHint => switch (this) {
@@ -120,6 +156,8 @@ enum ServiceKind {
     ServiceKind.overseerr => 'Settings → General → API Key',
     ServiceKind.emby => 'Settings → Advanced → API Keys → New API Key',
     ServiceKind.jellyfin => 'Dashboard → API Keys → +',
+    ServiceKind.tracearr => 'Settings → General → API key (starts with trr_pub_)',
+    ServiceKind.ntfy => 'Only if your ntfy server requires login (tk_…)',
     _ => 'Settings → General → Security → API Key',
   };
 }

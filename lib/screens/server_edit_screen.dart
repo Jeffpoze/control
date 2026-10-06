@@ -225,7 +225,7 @@ class _ServerEditScreenState extends State<ServerEditScreen> {
                 obscureText: !_showSecret,
                 autocorrect: false,
                 decoration: InputDecoration(
-                  labelText: 'API key',
+                  labelText: kind.apiKeyLabel,
                   helperText: kind.apiKeyHint,
                   suffixIcon: IconButton(
                     icon: Icon(
@@ -234,8 +234,9 @@ class _ServerEditScreenState extends State<ServerEditScreen> {
                     onPressed: () => setState(() => _showSecret = !_showSecret),
                   ),
                 ),
-                validator: (v) =>
-                    (v ?? '').trim().isEmpty ? 'Enter the API key' : null,
+                validator: (v) => (v ?? '').trim().isEmpty && !kind.apiKeyOptional
+                    ? 'Enter the API key'
+                    : null,
               )
             else ...[
               TextFormField(

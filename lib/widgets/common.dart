@@ -136,11 +136,15 @@ class Poster extends StatelessWidget {
     this.width,
     this.height,
     this.icon = Icons.movie_outlined,
+    this.headers,
   });
   final String? url;
   final double? width;
   final double? height;
   final IconData icon;
+
+  /// For images that need a session cookie (Comicarr's cached covers).
+  final Map<String, String>? headers;
 
   @override
   Widget build(BuildContext context) {
@@ -156,6 +160,7 @@ class Poster extends StatelessWidget {
           ? placeholder
           : Image.network(
               url!,
+              headers: headers,
               width: width,
               height: height,
               fit: BoxFit.cover,

@@ -9,7 +9,7 @@ const groupLabels = {
   ServiceGroup.downloader: 'Download clients',
   ServiceGroup.media: 'TV, movies and music',
   ServiceGroup.indexer: 'Indexers',
-  ServiceGroup.other: 'Requests, streaming and subtitles',
+  ServiceGroup.other: 'Requests, streaming, subtitles, comics and notifications',
 };
 
 /// Opens the "what kind of server?" sheet, then the editor.

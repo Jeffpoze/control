@@ -1,17 +1,21 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:control/models/server.dart';
 import 'package:control/services/arr.dart';
 import 'package:control/services/bazarr.dart';
+import 'package:control/services/comicarr.dart';
 import 'package:control/services/download_client.dart';
 import 'package:control/services/media_server.dart';
+import 'package:control/services/ntfy.dart';
 import 'package:control/services/nzbget.dart';
 import 'package:control/services/overseerr.dart';
 import 'package:control/services/qbittorrent.dart';
 import 'package:control/services/sabnzbd.dart';
 import 'package:control/services/service_client.dart';
 import 'package:control/services/tautulli.dart';
+import 'package:control/services/tracearr.dart';
 import 'package:control/services/transmission.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -793,6 +797,485 @@ void main() {
         ),
         SubLanguage(name: 'English', code: 'en', hi: true),
       );
+    });
+  });
+
+  group('Notifications', () {
+    test('topics are long, random and valid for ntfy', () {
+      final t = randomTopic(Random(1));
+      expect(t, matches(RegExp(r'^control_[a-z0-9]{20}$')));
+      expect(randomTopic(Random(2)), isNot(t));
+    });
+
+    test('ntfy.sh target', () {
+      final t = NtfyTarget.of(publicNtfy, 'control_abc');
+      expect(t.publishUrl.toString(), 'https://ntfy.sh');
+      expect(t.appriseUrl, 'ntfys://ntfy.sh/control_abc');
+      expect(t.appUrl.toString(), 'ntfy://ntfy.sh/control_abc');
+      expect(t.webUrl.toString(), 'https://ntfy.sh/control_abc');
+    });
+
+    test('self-hosted target: apps use home, phone uses away', () {
+      final ntfy = ServerConfig(
+        id: 'n',
+        kind: ServiceKind.ntfy,
+        name: 'ntfy',
+        localUrl: '192.168.5.150:8080',
+        remoteUrl: 'https://ntfy.example.com',
+        apiKey: 'tk_secret',
+      );
+      final t = NtfyTarget.of(ntfy, 'control_abc');
+      expect(t.publishUrl.toString(), 'http://192.168.5.150:8080');
+      expect(t.appriseUrl, 'ntfy://tk_secret@192.168.5.150:8080/control_abc');
+      expect(t.subscribeUrl.toString(), 'https://ntfy.example.com');
+      final homeOnly = NtfyTarget.of(
+        ntfy.copyWith(remoteUrl: ''),
+        'control_abc',
+      );
+      expect(
+        homeOnly.appUrl.toString(),
+        'ntfy://192.168.5.150:8080/control_abc?secure=false',
+      );
+    });
+
+    test('test message goes straight to the topic', () async {
+      final c = NtfyClient(
+        ServerConfig(
+          id: 'n',
+          kind: ServiceKind.ntfy,
+          name: 'ntfy',
+          localUrl: 'ntfy.local',
+          apiKey: 'tk_1',
+        ),
+        httpClient: MockClient((req) async {
+          expect(req.method, 'POST');
+          expect(req.url.path, '/control_abc');
+          expect(req.headers['Title'], 'Hello');
+          expect(req.headers['Authorization'], 'Bearer tk_1');
+          expect(req.body, 'It works');
+          return json({'id': 'x'});
+        }),
+      );
+      await c.publish('control_abc', 'It works', title: 'Hello');
+    });
+
+    final schema = {
+      'implementation': 'Ntfy',
+      'configContract': 'NtfySettings',
+      'name': '',
+      'onGrab': false,
+      'onDownload': false,
+      'onUpgrade': false,
+      'onHealthIssue': false,
+      'onManualInteractionRequired': false,
+      'includeHealthWarnings': true,
+      'supportsOnGrab': true,
+      'supportsOnDownload': true,
+      'supportsOnUpgrade': true,
+      'supportsOnHealthIssue': true,
+      'supportsOnManualInteractionRequired': false,
+      'presets': [],
+      'tags': [],
+      'fields': [
+        {'name': 'serverUrl', 'value': null},
+        {'name': 'accessToken', 'value': null},
+        {'name': 'priority', 'value': 3},
+        {'name': 'topics', 'value': []},
+        {'name': 'tags', 'value': []},
+      ],
+    };
+
+    test('*arr connection is filled from the schema', () {
+      final body = ArrClient.ntfyBody(
+        schema,
+        NtfyTarget.of(publicNtfy, 'control_abc'),
+        const NotifyEvents(grabs: true),
+        existingId: 7,
+      );
+      expect(body['name'], 'Control');
+      expect(body['id'], 7);
+      expect(body.containsKey('presets'), isFalse);
+      final fields = {
+        for (final f in body['fields'] as List) f['name']: f['value'],
+      };
+      expect(fields['serverUrl'], 'https://ntfy.sh');
+      expect(fields['topics'], ['control_abc']);
+      expect(fields['accessToken'], '');
+      expect(fields['tags'], []);
+      expect(body['onGrab'], isTrue);
+      expect(body['onDownload'], isTrue);
+      expect(body['onUpgrade'], isTrue);
+      expect(body['onHealthIssue'], isTrue);
+      // Not supported by this app, so left off.
+      expect(body['onManualInteractionRequired'], isFalse);
+      expect(body['includeHealthWarnings'], isFalse);
+      expect(body.containsKey('onReleaseImport'), isFalse);
+    });
+
+    test('setting up again updates Control\'s connection', () async {
+      final calls = <String>[];
+      final c = ArrClient(
+        server(ServiceKind.radarr),
+        httpClient: MockClient((req) async {
+          calls.add('${req.method} ${req.url.path}');
+          if (req.url.path.endsWith('/schema')) return json([schema]);
+          if (req.method == 'GET') {
+            return json([
+              {'id': 3, 'implementation': 'Ntfy', 'name': 'Other'},
+              {'id': 9, 'implementation': 'Ntfy', 'name': 'Control'},
+            ]);
+          }
+          expect(jsonDecode(req.body)['id'], 9);
+          return json({'id': 9});
+        }),
+      );
+      await c.connectNtfy(
+        NtfyTarget.of(publicNtfy, 'control_abc'),
+        const NotifyEvents(),
+      );
+      expect(calls, [
+        'GET /api/v3/notification/schema',
+        'GET /api/v3/notification',
+        'PUT /api/v3/notification/9',
+      ]);
+    });
+
+    test('SABnzbd keeps other Apprise URLs and replaces an old topic', () {
+      final settings = SabnzbdClient.appriseSettings(
+        'discord://a/b, ntfys://ntfy.sh/control_oldtopic123',
+        NtfyTarget.of(publicNtfy, 'control_new'),
+        const NotifyEvents(sabComplete: true),
+      );
+      expect(
+        settings['apprise_urls'],
+        'discord://a/b, ntfys://ntfy.sh/control_new',
+      );
+      expect(settings['apprise_enable'], '1');
+      expect(settings['apprise_target_complete_enable'], '1');
+      expect(settings['apprise_target_failed_enable'], '1');
+    });
+
+    test('SABnzbd setup writes through set_config', () async {
+      final writes = <String, String>{};
+      final c = SabnzbdClient(
+        server(ServiceKind.sabnzbd),
+        httpClient: MockClient((req) async {
+          final q = req.url.queryParameters;
+          if (q['mode'] == 'get_config') {
+            expect(q['section'], 'apprise');
+            return json({
+              'config': {
+                'apprise': {'apprise_urls': ''},
+              },
+            });
+          }
+          expect(q['mode'], 'set_config');
+          writes[q['keyword']!] = q['value']!;
+          return json({'status': true});
+        }),
+      );
+      await c.connectNtfy(
+        NtfyTarget.of(publicNtfy, 'control_abc'),
+        const NotifyEvents(),
+      );
+      expect(writes['apprise_urls'], 'ntfys://ntfy.sh/control_abc');
+      expect(writes['apprise_target_complete_enable'], '0');
+    });
+
+    test('settings round-trip', () {
+      final s = NotifySettings(
+        topic: 'control_abc',
+        serverId: 'n',
+        events: const NotifyEvents(grabs: true, problems: false),
+      );
+      final back = NotifySettings.fromJson(
+        jsonDecode(jsonEncode(s.toJson())) as Map<String, dynamic>,
+      );
+      expect(back.topic, 'control_abc');
+      expect(back.serverId, 'n');
+      expect(back.events.grabs, isTrue);
+      expect(back.events.problems, isFalse);
+      expect(back.events.imports, isTrue);
+      expect(s.copyWith(publicServer: true).serverId, isNull);
+    });
+  });
+
+  group('Tracearr', () {
+    test('streams, with relative posters made absolute', () {
+      final a = TracearrClient.parseStreams({
+        'data': [
+          {
+            'id': 'uuid-1',
+            'serverName': 'Plex',
+            'username': 'jeff',
+            'mediaType': 'episode',
+            'mediaTitle': 'Pilot',
+            'showTitle': 'Severance',
+            'seasonNumber': 1,
+            'episodeNumber': 1,
+            'durationMs': 4000,
+            'progressMs': 1000,
+            'state': 'paused',
+            'isTranscode': true,
+            'resolution': '1080p',
+            'player': 'Infuse',
+            'device': 'Apple TV',
+            'posterUrl': '/api/v1/images/proxy?server=s&url=%2Fl%2F1&width=360',
+          },
+        ],
+        'summary': {'total': 1, 'totalBitrate': '12.5 Mbps'},
+      }, Uri.parse('http://192.168.5.150:3000'));
+      final s = a.sessions.single;
+      expect(s.title, 'Severance');
+      expect(s.subtitle, 'S01E01 · Pilot');
+      expect(s.player, 'Plex · Infuse · Apple TV');
+      expect(s.progress, 0.25);
+      expect(s.state, 'paused');
+      expect(s.transcoding, isTrue);
+      expect(s.quality, '1080p');
+      expect(
+        s.thumbUrl,
+        'http://192.168.5.150:3000/api/v1/images/proxy?server=s&url=%2Fl%2F1&width=360',
+      );
+      expect(a.bandwidthKbps, 12500);
+    });
+
+    test('bitrate strings', () {
+      expect(TracearrClient.parseBitrate('1.2 Gbps'), 1200000);
+      expect(TracearrClient.parseBitrate('800 kbps'), 800);
+      expect(TracearrClient.parseBitrate('—'), isNull);
+    });
+
+    test('history and alerts', () {
+      final plays = TracearrClient.parseHistory({
+        'data': [
+          {
+            'mediaType': 'movie',
+            'mediaTitle': 'Dune',
+            'year': 2021,
+            'serverName': 'Emby',
+            'durationMs': 3600000,
+            'watched': true,
+            'startedAt': '2026-10-05T20:00:00Z',
+            'user': {'username': 'guest'},
+            'posterUrl': 'https://plex.tv/p.jpg',
+          },
+        ],
+        'meta': {'total': 1},
+      }, null);
+      expect(plays.single.title, 'Dune');
+      expect(plays.single.subtitle, '2021');
+      expect(plays.single.user, 'guest');
+      expect(plays.single.watched, isTrue);
+      expect(plays.single.posterUrl, 'https://plex.tv/p.jpg');
+      final alerts = TracearrClient.parseAlerts({
+        'data': [
+          {
+            'severity': 'high',
+            'serverName': 'Plex',
+            'createdAt': '2026-10-05T20:00:00Z',
+            'rule': {'name': 'Concurrent streams'},
+            'user': {'username': 'guest'},
+          },
+        ],
+      });
+      expect(alerts.single.rule, 'Concurrent streams');
+      expect(alerts.single.severity, 'high');
+    });
+
+    test('Bearer key, health check and stopping a stream', () async {
+      final calls = <String>[];
+      final c = TracearrClient(
+        server(ServiceKind.tracearr, apiKey: 'trr_pub_abc'),
+        httpClient: MockClient((req) async {
+          expect(req.headers['Authorization'], 'Bearer trr_pub_abc');
+          calls.add('${req.method} ${req.url.path}');
+          if (req.url.path.endsWith('/health')) {
+            return json({'status': 'ok', 'servers': []});
+          }
+          expect(jsonDecode(req.body), {'reason': 'Maintenance'});
+          return json({'success': true});
+        }),
+      );
+      await c.test();
+      await c.terminate(
+        PlaySession(id: 'uuid-1', title: 'x'),
+        message: 'Maintenance',
+      );
+      expect(calls, [
+        'GET /api/v1/public/health',
+        'POST /api/v1/public/streams/uuid-1/terminate',
+      ]);
+    });
+  });
+
+  group('Comicarr', () {
+    test('signs in, sends the session and CSRF header, retries on 401', () async {
+      var logins = 0;
+      var seriesCalls = 0;
+      final c = ComicarrClient(
+        server(ServiceKind.comicarr, user: 'jeff', pass: 'pw'),
+        httpClient: MockClient((req) async {
+          expect(req.headers['X-Requested-With'], 'ComicarrFrontend');
+          if (req.url.path == '/api/auth/login') {
+            logins++;
+            expect(jsonDecode(req.body), {'username': 'jeff', 'password': 'pw'});
+            return json(
+              {'success': true, 'username': 'jeff'},
+              headers: {
+                'set-cookie':
+                    'comicarr_session=tok$logins; HttpOnly; Path=/; SameSite=strict',
+              },
+            );
+          }
+          seriesCalls++;
+          if (req.headers['Cookie'] == 'comicarr_session=tok1') {
+            return json({'detail': 'Session expired or invalid'}, status: 401);
+          }
+          expect(req.headers['Cookie'], 'comicarr_session=tok2');
+          return json([
+            {
+              'ComicID': '4050',
+              'ComicName': 'Saga',
+              'ComicYear': '2012',
+              'ComicImage': '/api/metadata/art/4050',
+              'ComicImageURL': 'https://comicvine.gamespot.com/saga.jpg',
+              'Status': 'Paused',
+              'Total': 60,
+              'Have': 45,
+            },
+          ]);
+        }),
+      );
+      final series = await c.series();
+      expect(logins, 2);
+      expect(seriesCalls, 2);
+      final s = series.single;
+      expect(s.name, 'Saga');
+      expect(s.paused, isTrue);
+      expect(s.completion, 0.75);
+      expect(s.coverUrl, 'https://comicvine.gamespot.com/saga.jpg');
+    });
+
+    test('wrong password shows Comicarr\'s message', () async {
+      final c = ComicarrClient(
+        server(ServiceKind.comicarr, user: 'jeff', pass: 'bad'),
+        httpClient: MockClient(
+          (_) async => json({
+            'success': false,
+            'error': 'Incorrect username or password.',
+          }, status: 401),
+        ),
+      );
+      await expectLater(
+        c.series(),
+        throwsA(
+          isA<ApiException>().having(
+            (e) => e.message,
+            'message',
+            'Comicarr: Incorrect username or password.',
+          ),
+        ),
+      );
+    });
+
+    test('series without a provider cover uses Comicarr\'s own', () {
+      final s = ComicarrClient.parseSeries(
+        {
+          'comics': [
+            {'ComicID': '1', 'ComicImage': '/api/metadata/art/1'},
+          ],
+        },
+        Uri.parse('http://192.168.5.150:8090'),
+      );
+      expect(s.single.coverUrl, 'http://192.168.5.150:8090/api/metadata/art/1');
+    });
+
+    test('series detail, wanted and this week', () {
+      final (series, issues) = ComicarrClient.parseDetail({
+        'comic': [
+          {'ComicID': '1', 'ComicName': 'Saga', 'Total': 2, 'Have': 1},
+        ],
+        'issues': [
+          {
+            'id': 'i2',
+            'number': '2',
+            'name': 'Two',
+            'releaseDate': '2012-04-11',
+            'displayState': 'Wanted',
+          },
+          {'id': 'i1', 'number': '1', 'displayState': 'Downloaded'},
+        ],
+      }, null);
+      expect(series.name, 'Saga');
+      expect(issues.map((i) => i.state), ['Wanted', 'Downloaded']);
+      expect(issues.last.owned, isTrue);
+      expect(issues.first.releaseDate, '2012-04-11');
+
+      final wanted = ComicarrClient.parseWanted({
+        'issues': [
+          {
+            'ComicName': 'Saga',
+            'Issue_Number': '61',
+            'IssueName': 'Return',
+            'ReleaseDate': '2026-10-07',
+            'ComicID': '1',
+            'IssueID': 'i61',
+            'Status': 'Wanted',
+          },
+        ],
+      });
+      expect(wanted.single.label, 'Saga #61');
+      expect(wanted.single.issueId, 'i61');
+
+      final week = ComicarrClient.parseUpcoming([
+        {
+          'ComicName': 'SAGA',
+          'DisplayComicName': 'Saga',
+          'IssueNumber': '61',
+          'IssueDate': '2026-10-07',
+          'Status': 'Downloaded',
+          'ComicID': '1',
+          'IssueID': 'i61',
+        },
+      ]);
+      expect(week.single.label, 'Saga #61');
+      expect(week.single.status, 'Downloaded');
+    });
+
+    test('search missing previews, then confirms with the token', () async {
+      final calls = <String>[];
+      final c = ComicarrClient(
+        server(ServiceKind.comicarr, user: 'u', pass: 'p'),
+        httpClient: MockClient((req) async {
+          calls.add('${req.method} ${req.url.path}');
+          if (req.url.path == '/api/auth/login') {
+            return json(
+              {'success': true},
+              headers: {'set-cookie': 'comicarr_session=t; Path=/'},
+            );
+          }
+          if (req.method == 'GET') {
+            return json({
+              'eligibleCount': 3,
+              'preview_token': 'pt',
+              'fingerprint': 'fp',
+            });
+          }
+          expect(jsonDecode(req.body), {
+            'confirm': true,
+            'preview_token': 'pt',
+            'fingerprint': 'fp',
+          });
+          return json({'success': true, 'status': 'accepted'});
+        }),
+      );
+      expect(await c.searchMissing('1'), 3);
+      expect(calls, [
+        'POST /api/auth/login',
+        'GET /api/series/1/search-missing/preview',
+        'POST /api/series/1/search-missing',
+      ]);
     });
   });
 }

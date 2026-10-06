@@ -415,8 +415,8 @@ class _Welcome extends StatelessWidget {
     icon: Icons.tune,
     title: 'Welcome to Control',
     body:
-        'Manage SABnzbd, NZBGet, qBittorrent, Transmission, Sonarr, Radarr, '
-        'Lidarr, Bazarr, Prowlarr, Overseerr, Tautulli, Emby and Jellyfin '
+        'Manage your download clients, Sonarr, Radarr, Lidarr, Bazarr, '
+        'Prowlarr, Overseerr, Comicarr, Tautulli, Tracearr, Emby and Jellyfin '
         'from one place. '
         'Start by adding a server.',
     action: FilledButton.icon(

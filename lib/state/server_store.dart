@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/server.dart';
 import '../services/clients.dart';
+import '../services/ntfy.dart';
 
 /// Where secrets live. The app uses the iOS Keychain; tests use memory.
 abstract class SecretStore {
@@ -44,11 +45,16 @@ class ServerStore extends ChangeNotifier {
     : _secrets = secrets ?? KeychainSecretStore();
 
   static const _prefsKey = 'servers.v1';
+  static const _notifyKey = 'notify.v1';
 
   final SecretStore _secrets;
   final Map<String, ServiceClient> _clients = {};
   List<ServerConfig> _servers = [];
   bool loaded = false;
+
+  /// Where notifications go; null until set up. Kept in secure storage, as
+  /// anyone with the topic can read the notifications.
+  NotifySettings? notify;
 
   List<ServerConfig> get servers => List.unmodifiable(_servers);
 
@@ -82,9 +88,25 @@ class ServerStore extends ChangeNotifier {
       }
     }
     _servers = list;
+    final notifyRaw = await _secrets.read(_notifyKey);
+    if (notifyRaw != null) {
+      notify = NotifySettings.fromJson(
+        (jsonDecode(notifyRaw) as Map).cast<String, dynamic>(),
+      );
+    }
     loaded = true;
     notifyListeners();
   }
+
+  Future<void> saveNotify(NotifySettings settings) async {
+    notify = settings;
+    await _secrets.write(_notifyKey, jsonEncode(settings.toJson()));
+    notifyListeners();
+  }
+
+  /// The ntfy server notifications go through.
+  ServerConfig ntfyServer() =>
+      (notify?.serverId == null ? null : byId(notify!.serverId!)) ?? publicNtfy;
 
   Future<void> save(ServerConfig server) async {
     final i = _servers.indexWhere((s) => s.id == server.id);

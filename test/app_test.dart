@@ -1,5 +1,6 @@
 import 'package:control/app.dart';
 import 'package:control/models/server.dart';
+import 'package:control/services/ntfy.dart';
 import 'package:control/state/nav_state.dart';
 import 'package:control/state/server_store.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -61,5 +62,22 @@ void main() {
 
     await reloaded.remove('a');
     expect(secrets.values, isEmpty);
+  });
+
+  test('notification topic is a secret, not a preference', () async {
+    final secrets = MemorySecretStore();
+    final store = ServerStore(secrets: secrets);
+    await store.load();
+    expect(store.notify, isNull);
+    expect(store.ntfyServer().remoteUrl, 'https://ntfy.sh');
+    await store.saveNotify(NotifySettings(topic: 'control_secret123'));
+
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getKeys().map(prefs.get).join(), isNot(contains('control_secret')));
+    expect(secrets.values['notify.v1'], contains('control_secret123'));
+
+    final reloaded = ServerStore(secrets: secrets);
+    await reloaded.load();
+    expect(reloaded.notify!.topic, 'control_secret123');
   });
 }
