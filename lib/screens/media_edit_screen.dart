@@ -40,7 +40,8 @@ class _MediaEditScreenState extends State<MediaEditScreen> {
     try {
       final quality = await client.qualityProfiles();
       final roots = await client.rootFolders();
-      final language = kind == ServiceKind.sonarr && _edit.languageProfileId != null
+      final language =
+          kind == ServiceKind.sonarr && _edit.languageProfileId != null
           ? await client.languageProfiles()
           : const <Profile>[];
       final metadata = kind == ServiceKind.lidarr
@@ -133,7 +134,8 @@ class _MediaEditScreenState extends State<MediaEditScreen> {
                     onChanged: (v) => _edit.languageProfileId = v,
                   ),
                 ],
-                if (_metadata.isNotEmpty && _edit.metadataProfileId != null) ...[
+                if (_metadata.isNotEmpty &&
+                    _edit.metadataProfileId != null) ...[
                   const SizedBox(height: 16),
                   _dropdown<int>(
                     label: 'Metadata profile',

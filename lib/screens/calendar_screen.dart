@@ -148,7 +148,10 @@ class _CalendarScreenState extends State<CalendarScreen> {
 }
 
 /// Opens the series, movie or artist a calendar entry belongs to.
-Future<void> openCalendarEntry(BuildContext context, CalendarEntry entry) async {
+Future<void> openCalendarEntry(
+  BuildContext context,
+  CalendarEntry entry,
+) async {
   final store = context.read<ServerStore>();
   final server = store.byId(entry.serverId);
   if (server == null || entry.mediaId == 0) return;
@@ -174,7 +177,9 @@ class CalendarTile extends StatelessWidget {
     final theme = Theme.of(context);
     final hasTime = entry.kind == ServiceKind.sonarr;
     return ListTile(
-      onTap: entry.mediaId == 0 ? null : () => openCalendarEntry(context, entry),
+      onTap: entry.mediaId == 0
+          ? null
+          : () => openCalendarEntry(context, entry),
       leading: Poster(
         url: entry.posterUrl,
         width: 36,

@@ -1457,7 +1457,11 @@ void main() {
 
     test('releases: approved first, then score, then size', () {
       final sorted = ArrClient.sortReleases([
-        ArrRelease({'title': 'rejected', 'rejected': true, 'customFormatScore': 900}),
+        ArrRelease({
+          'title': 'rejected',
+          'rejected': true,
+          'customFormatScore': 900,
+        }),
         ArrRelease({'title': 'small', 'customFormatScore': 100, 'size': 1}),
         ArrRelease({'title': 'big', 'customFormatScore': 100, 'size': 9}),
         ArrRelease({'title': 'best', 'customFormatScore': 500}),

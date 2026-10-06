@@ -471,18 +471,16 @@ class ArrClient extends ServiceClient {
     int? seasonNumber,
     int? albumId,
   }) async {
-    final list =
-        await getJson(
-              '$_v/release',
-              query: {
-                if (movieId != null) 'movieId': '$movieId',
-                if (episodeId != null) 'episodeId': '$episodeId',
-                if (seriesId != null) 'seriesId': '$seriesId',
-                if (seasonNumber != null) 'seasonNumber': '$seasonNumber',
-                if (albumId != null) 'albumId': '$albumId',
-              },
-            )
-            as List;
+    final list = await getJson(
+      '$_v/release',
+      query: {
+        if (movieId != null) 'movieId': '$movieId',
+        if (episodeId != null) 'episodeId': '$episodeId',
+        if (seriesId != null) 'seriesId': '$seriesId',
+        if (seasonNumber != null) 'seasonNumber': '$seasonNumber',
+        if (albumId != null) 'albumId': '$albumId',
+      },
+    ) as List;
     return sortReleases([
       for (final r in list)
         if (r is Map) ArrRelease(r.cast()),
@@ -491,13 +489,13 @@ class ArrClient extends ServiceClient {
 
   /// Approved releases first, then by custom format score and size, the way
   /// the *arr would pick.
-  static List<ArrRelease> sortReleases(List<ArrRelease> list) => list
-    ..sort((a, b) {
-      if (a.rejected != b.rejected) return a.rejected ? 1 : -1;
-      final score = b.customFormatScore.compareTo(a.customFormatScore);
-      if (score != 0) return score;
-      return b.size.compareTo(a.size);
-    });
+  static List<ArrRelease> sortReleases(List<ArrRelease> list) =>
+      list..sort((a, b) {
+        if (a.rejected != b.rejected) return a.rejected ? 1 : -1;
+        final score = b.customFormatScore.compareTo(a.customFormatScore);
+        if (score != 0) return score;
+        return b.size.compareTo(a.size);
+      });
 
   /// Sends a release to the download client.
   Future<void> grab(ArrRelease r) => sendJson(

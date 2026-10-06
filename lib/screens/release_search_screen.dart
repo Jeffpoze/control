@@ -67,8 +67,9 @@ class _ReleaseSearchScreenState extends State<ReleaseSearchScreen> {
       title: 'Download this release?',
       body: [
         r.title,
-        if (r.rejected) '\n${widget.client.kind.label} would normally skip it: '
-            '${r.rejections.join('; ')}',
+        if (r.rejected)
+          '\n${widget.client.kind.label} would normally skip it: '
+              '${r.rejections.join('; ')}',
       ].join('\n'),
       action: 'Download',
       destructive: false,
@@ -130,11 +131,12 @@ class _ReleaseSearchScreenState extends State<ReleaseSearchScreen> {
                       title: 'No releases found',
                     ),
                   ),
-                for (final r in shown) _ReleaseTile(
-                  release: r,
-                  grabbed: _grabbed.contains(r.guid),
-                  onTap: () => _grab(r),
-                ),
+                for (final r in shown)
+                  _ReleaseTile(
+                    release: r,
+                    grabbed: _grabbed.contains(r.guid),
+                    onTap: () => _grab(r),
+                  ),
               ],
             ),
     );
@@ -191,7 +193,9 @@ class _ReleaseTile extends StatelessWidget {
               r.indexer,
               if (r.isTorrent) '${r.seeders} seeders' else 'Usenet',
               if (age > 0)
-                age < 1 ? '${(age * 24).round()} h old' : '${age.round()} days old',
+                age < 1
+                    ? '${(age * 24).round()} h old'
+                    : '${age.round()} days old',
             ].where((x) => x.isNotEmpty).join(' · '),
             style: theme.textTheme.bodySmall,
           ),

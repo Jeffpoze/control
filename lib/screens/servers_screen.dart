@@ -42,36 +42,38 @@ Future<void> addServer(BuildContext context, {ServiceGroup? group}) async {
   final kind = only.length == 1
       ? only.single
       : await showModalBottomSheet<ServiceKind>(
-    context: context,
-    showDragHandle: true,
-    isScrollControlled: true,
-    builder: (context) => SafeArea(
-      child: ListView(
-        shrinkWrap: true,
-        children: [
-          for (final g in groupLabels.keys)
-            if (group == null || group == g) ...[
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                child: Text(
-                  groupLabels[g]!,
-                  style: Theme.of(context).textTheme.labelLarge,
-                ),
-              ),
-              for (final k in ServiceKind.values.where((k) => k.group == g))
-                ListTile(
-                  leading: Icon(k.icon),
-                  title: Text(k.label),
-                  subtitle: k == ServiceKind.tautulli
-                      ? const Text('For Plex')
-                      : null,
-                  onTap: () => Navigator.pop(context, k),
-                ),
-            ],
-        ],
-      ),
-    ),
-  );
+          context: context,
+          showDragHandle: true,
+          isScrollControlled: true,
+          builder: (context) => SafeArea(
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                for (final g in groupLabels.keys)
+                  if (group == null || group == g) ...[
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                      child: Text(
+                        groupLabels[g]!,
+                        style: Theme.of(context).textTheme.labelLarge,
+                      ),
+                    ),
+                    for (final k in ServiceKind.values.where(
+                      (k) => k.group == g,
+                    ))
+                      ListTile(
+                        leading: Icon(k.icon),
+                        title: Text(k.label),
+                        subtitle: k == ServiceKind.tautulli
+                            ? const Text('For Plex')
+                            : null,
+                        onTap: () => Navigator.pop(context, k),
+                      ),
+                  ],
+              ],
+            ),
+          ),
+        );
   if (kind == null || !context.mounted) return;
   await Navigator.of(context).push(
     MaterialPageRoute(
@@ -184,7 +186,10 @@ class ServersScreen extends StatelessWidget {
     if (!ok) return;
     await Clipboard.setData(ClipboardData(text: store.exportBackup()));
     if (context.mounted) {
-      showMessage(context, 'Backup copied. Paste it into Control on the other phone.');
+      showMessage(
+        context,
+        'Backup copied. Paste it into Control on the other phone.',
+      );
     }
   }
 
@@ -200,7 +205,8 @@ class ServersScreen extends StatelessWidget {
       final (servers, _) = ServerStore.parseBackup(text);
       final ok = await confirm(
         context,
-        title: 'Restore ${servers.length} server${servers.length == 1 ? '' : 's'}?',
+        title:
+            'Restore ${servers.length} server${servers.length == 1 ? '' : 's'}?',
         body: 'Servers from this backup that are already here are updated.',
         action: 'Restore',
         destructive: false,
