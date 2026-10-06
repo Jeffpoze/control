@@ -1,5 +1,6 @@
 import 'package:control/app.dart';
 import 'package:control/models/server.dart';
+import 'package:control/services/ntfy.dart';
 import 'package:control/state/nav_state.dart';
 import 'package:control/state/server_store.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -60,6 +61,114 @@ void main() {
     );
 
     await reloaded.remove('a');
-    expect(secrets.values, isEmpty);
+    expect(secrets.values.containsKey('server.a'), isFalse);
+    expect(secrets.values['servers.list.v1'], '[]');
+  });
+
+  test('notification topic is a secret, not a preference', () async {
+    final secrets = MemorySecretStore();
+    final store = ServerStore(secrets: secrets);
+    await store.load();
+    expect(store.notify, isNull);
+    expect(store.ntfyServer().remoteUrl, 'https://ntfy.sh');
+    await store.saveNotify(NotifySettings(topic: 'control_secret123'));
+
+    final prefs = await SharedPreferences.getInstance();
+    expect(
+      prefs.getKeys().map(prefs.get).join(),
+      isNot(contains('control_secret')),
+    );
+    expect(secrets.values['notify.v1'], contains('control_secret123'));
+
+    final reloaded = ServerStore(secrets: secrets);
+    await reloaded.load();
+    expect(reloaded.notify!.topic, 'control_secret123');
+  });
+
+  test('setup comes back from secure storage after a reinstall', () async {
+    final secrets = MemorySecretStore();
+    final store = ServerStore(secrets: secrets);
+    await store.load();
+    await store.save(
+      ServerConfig(
+        id: 'r',
+        kind: ServiceKind.radarr,
+        name: 'Radarr',
+        localUrl: '10.0.0.2:7878',
+        apiKey: 'k',
+      ),
+    );
+    // Deleting the app wipes preferences; the iOS Keychain stays.
+    SharedPreferences.setMockInitialValues({});
+    final reinstalled = ServerStore(secrets: secrets);
+    await reinstalled.load();
+    expect(reinstalled.servers.single.name, 'Radarr');
+    expect(reinstalled.servers.single.apiKey, 'k');
+  });
+
+  test('servers saved by an older version move into secure storage', () async {
+    SharedPreferences.setMockInitialValues({
+      'servers.v1':
+          '[{"id":"s","kind":"sonarr","name":"Sonarr","localUrl":"nas:8989"}]',
+    });
+    final secrets = MemorySecretStore()
+      ..values['server.s'] = '{"apiKey":"old"}';
+    final store = ServerStore(secrets: secrets);
+    await store.load();
+    expect(store.servers.single.apiKey, 'old');
+    expect(secrets.values['servers.list.v1'], contains('"sonarr"'));
+  });
+
+  test('backup round-trips every server and its secrets', () async {
+    final store = ServerStore(secrets: MemorySecretStore());
+    await store.load();
+    await store.save(
+      ServerConfig(
+        id: 'q',
+        kind: ServiceKind.qbittorrent,
+        name: 'qBittorrent',
+        localUrl: '10.0.0.3:8080',
+        username: 'admin',
+        password: 'pw',
+        customHeaders: 'X-Token: 1',
+      ),
+    );
+    await store.saveNotify(NotifySettings(topic: 'control_abc'));
+    final text = store.exportBackup();
+
+    final other = ServerStore(secrets: MemorySecretStore());
+    await other.load();
+    expect(await other.importBackup(text), 1);
+    final q = other.servers.single;
+    expect(q.password, 'pw');
+    expect(q.headerMap, {'X-Token': '1'});
+    expect(other.notify!.topic, 'control_abc');
+
+    expect(
+      () => ServerStore.parseBackup('hello'),
+      throwsA(isA<FormatException>()),
+    );
+    expect(
+      () => ServerStore.parseBackup('{"servers": []}'),
+      throwsA(isA<FormatException>()),
+    );
+  });
+
+  test('Media calls Sonarr, Radarr and Lidarr TV, Movies and Music', () {
+    ServerConfig s(ServiceKind k, String name) =>
+        ServerConfig(id: name, kind: k, name: name);
+    expect(s(ServiceKind.sonarr, 'Sonarr').mediaLabel, 'TV');
+    expect(s(ServiceKind.radarr, 'Radarr').mediaLabel, 'Movies');
+    expect(s(ServiceKind.lidarr, 'Lidarr').mediaLabel, 'Music');
+    expect(s(ServiceKind.radarr, '4K').mediaLabel, 'Movies · 4K');
+  });
+
+  test('every kind of server has a section', () {
+    for (final k in ServiceKind.values) {
+      expect(ServiceGroup.values, contains(k.group));
+    }
+    expect(ServiceKind.tautulli.group, ServiceGroup.mediaServer);
+    expect(ServiceKind.sabnzbd.group, ServiceGroup.downloader);
+    expect(ServiceKind.ntfy.group, ServiceGroup.notifications);
   });
 }

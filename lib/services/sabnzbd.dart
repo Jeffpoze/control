@@ -1,5 +1,6 @@
 import '../util/format.dart';
 import 'download_client.dart';
+import 'ntfy.dart';
 import 'service_client.dart';
 
 /// SABnzbd, through its `/api?mode=…&output=json` API.
@@ -147,4 +148,46 @@ class SabnzbdClient extends DownloadClient {
     'name': url,
     if (category != null && category.isNotEmpty) 'cat': category,
   });
+
+  /// Turns on SABnzbd's Apprise notifications and adds the ntfy target,
+  /// keeping any notification URLs already there.
+  Future<void> connectNtfy(NtfyTarget target, NotifyEvents events) async {
+    final config = await _api('get_config', {'section': 'apprise'});
+    final current =
+        ((config['config'] as Map?)?['apprise'] as Map?)?['apprise_urls']
+            ?.toString() ??
+        '';
+    final settings = appriseSettings(current, target, events);
+    for (final MapEntry(:key, :value) in settings.entries) {
+      await _api('set_config', {
+        'section': 'apprise',
+        'keyword': key,
+        'value': value,
+      });
+    }
+  }
+
+  /// The Apprise settings to write: the URL list with ours added once (an
+  /// older Control topic is replaced), and which events send.
+  static Map<String, String> appriseSettings(
+    String currentUrls,
+    NtfyTarget target,
+    NotifyEvents events,
+  ) {
+    final urls = currentUrls
+        .split(RegExp(r'[,\s]+'))
+        .where((u) => u.isNotEmpty)
+        .where((u) => !RegExp(r'^ntfys?://.*/control_[a-z0-9]+$').hasMatch(u))
+        .toList();
+    urls.add(target.appriseUrl);
+    String flag(bool on) => on ? '1' : '0';
+    return {
+      'apprise_enable': '1',
+      'apprise_urls': urls.join(', '),
+      'apprise_target_complete_enable': flag(events.sabComplete),
+      'apprise_target_failed_enable': flag(events.problems),
+      'apprise_target_disk_full_enable': flag(events.problems),
+      'apprise_target_warning_enable': '0',
+    };
+  }
 }

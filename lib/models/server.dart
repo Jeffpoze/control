@@ -1,7 +1,15 @@
 import 'package:flutter/material.dart';
 
 /// What a service is for. Drives where it shows up in the app.
-enum ServiceGroup { downloader, media, indexer, other }
+enum ServiceGroup {
+  downloader,
+  media,
+  library,
+  indexer,
+  requests,
+  mediaServer,
+  notifications,
+}
 
 /// How a service authenticates.
 enum AuthStyle { apiKey, login }
@@ -60,32 +68,60 @@ enum ServiceKind {
   ),
   overseerr(
     'Overseerr / Jellyseerr',
-    ServiceGroup.other,
+    ServiceGroup.requests,
     AuthStyle.apiKey,
     5055,
     Icons.playlist_add_check,
   ),
   tautulli(
     'Tautulli',
-    ServiceGroup.other,
+    ServiceGroup.mediaServer,
     AuthStyle.apiKey,
     8181,
     Icons.insights_outlined,
   ),
-  emby('Emby', ServiceGroup.other, AuthStyle.apiKey, 8096, Icons.live_tv),
+  emby('Emby', ServiceGroup.mediaServer, AuthStyle.apiKey, 8096, Icons.live_tv),
   jellyfin(
     'Jellyfin',
-    ServiceGroup.other,
+    ServiceGroup.mediaServer,
     AuthStyle.apiKey,
     8096,
     Icons.smart_display_outlined,
   ),
   bazarr(
     'Bazarr',
-    ServiceGroup.other,
+    ServiceGroup.library,
     AuthStyle.apiKey,
     6767,
     Icons.subtitles_outlined,
+  ),
+  comicarr(
+    'Comicarr',
+    ServiceGroup.library,
+    AuthStyle.login,
+    8090,
+    Icons.auto_stories_outlined,
+  ),
+  tracearr(
+    'Tracearr',
+    ServiceGroup.mediaServer,
+    AuthStyle.apiKey,
+    3000,
+    Icons.query_stats,
+  ),
+  tmdb(
+    'TMDB',
+    ServiceGroup.requests,
+    AuthStyle.apiKey,
+    443,
+    Icons.local_movies_outlined,
+  ),
+  ntfy(
+    'ntfy',
+    ServiceGroup.notifications,
+    AuthStyle.apiKey,
+    80,
+    Icons.notifications_outlined,
   );
 
   const ServiceKind(
@@ -106,12 +142,35 @@ enum ServiceKind {
   bool get usernameOptional =>
       this == ServiceKind.nzbget || this == ServiceKind.transmission;
 
+  /// What Media calls this kind: TV, Movies, Music.
+  String get mediaLabel => switch (this) {
+    ServiceKind.sonarr => 'TV',
+    ServiceKind.radarr => 'Movies',
+    ServiceKind.lidarr => 'Music',
+    _ => label,
+  };
+
   /// Servers that can say who's watching what.
   static const streaming = {
     ServiceKind.tautulli,
+    ServiceKind.tracearr,
     ServiceKind.emby,
     ServiceKind.jellyfin,
   };
+
+  /// Apps that can send ntfy notifications, and that Control can set up.
+  static const notifiers = {
+    ServiceKind.sonarr,
+    ServiceKind.radarr,
+    ServiceKind.lidarr,
+    ServiceKind.sabnzbd,
+  };
+
+  /// ntfy only needs a token when the server requires login.
+  bool get apiKeyOptional => this == ServiceKind.ntfy;
+
+  String get apiKeyLabel =>
+      this == ServiceKind.ntfy ? 'Access token (optional)' : 'API key';
 
   /// Where users find their API key, shown under the field.
   String get apiKeyHint => switch (this) {
@@ -120,6 +179,10 @@ enum ServiceKind {
     ServiceKind.overseerr => 'Settings → General → API Key',
     ServiceKind.emby => 'Settings → Advanced → API Keys → New API Key',
     ServiceKind.jellyfin => 'Dashboard → API Keys → +',
+    ServiceKind.tracearr =>
+      'Settings → General → API key (starts with trr_pub_)',
+    ServiceKind.ntfy => 'Only if your ntfy server requires login (tk_…)',
+    ServiceKind.tmdb => 'Free at themoviedb.org → Settings → API. The API key or the Read Access Token both work.',
     _ => 'Settings → General → Security → API Key',
   };
 }
@@ -165,6 +228,11 @@ class ServerConfig {
   final String customHeaders;
 
   Map<String, String> get headerMap => parseHeaderLines(customHeaders);
+
+  /// "TV", or "TV · 4K" when the user named a second Sonarr "4K".
+  String get mediaLabel => name == kind.label || name.isEmpty
+      ? kind.mediaLabel
+      : '${kind.mediaLabel} · $name';
 
   List<Uri> get baseUris => [
     localUrl,

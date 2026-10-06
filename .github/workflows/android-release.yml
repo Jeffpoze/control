@@ -24,7 +24,21 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - run: flutter build apk --release
+      - name: Signing key
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE }}
+        run: |
+          if [ -n "$KEYSTORE" ]; then
+            echo "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/control-release.jks"
+            echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/control-release.jks" >> "$GITHUB_ENV"
+          else
+            echo "::warning::No ANDROID_KEYSTORE secret: this APK is signed with a throwaway key and won't install over the previous one."
+          fi
+      - run: flutter build apk --release --dart-define=TMDB_KEY="$TMDB_KEY"
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          # The app's TMDB key comes from a repository secret, never the code.
+          TMDB_KEY: ${{ secrets.TMDB_TOKEN }}
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}

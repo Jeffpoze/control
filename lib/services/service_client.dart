@@ -52,6 +52,7 @@ abstract class ServiceClient {
     Map<String, String>? form,
     Map<String, String>? multipart,
     Map<String, String>? headers,
+    String? body,
     bool checkStatus = true,
   }) async {
     final bases = server.baseUris;
@@ -75,6 +76,7 @@ abstract class ServiceClient {
           form: form,
           multipart: multipart,
           headers: headers,
+          body: body,
         );
         final streamed = await httpClient
             .send(req)
@@ -131,6 +133,7 @@ abstract class ServiceClient {
     Map<String, String>? form,
     Map<String, String>? multipart,
     Map<String, String>? headers,
+    String? body,
   }) {
     final uri = joinUri(base, path, query);
     final allHeaders = <String, String>{
@@ -152,6 +155,8 @@ abstract class ServiceClient {
       req.body = jsonEncode(json);
     } else if (form != null) {
       req.bodyFields = form;
+    } else if (body != null) {
+      req.body = body;
     }
     return req;
   }

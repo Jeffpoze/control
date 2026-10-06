@@ -96,11 +96,15 @@ class ServerPicker extends StatelessWidget {
     required this.servers,
     required this.selectedId,
     required this.onSelected,
+    this.labelOf,
   });
 
   final List<ServerConfig> servers;
   final String? selectedId;
   final ValueChanged<ServerConfig> onSelected;
+
+  /// The chip text; the server name by default.
+  final String Function(ServerConfig)? labelOf;
 
   @override
   Widget build(BuildContext context) {
@@ -116,7 +120,7 @@ class ServerPicker extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 4),
               child: ChoiceChip(
                 avatar: Icon(s.kind.icon, size: 18),
-                label: Text(s.name),
+                label: Text(labelOf?.call(s) ?? s.name),
                 selected: s.id == selectedId,
                 showCheckmark: false,
                 onSelected: (_) => onSelected(s),
@@ -136,11 +140,15 @@ class Poster extends StatelessWidget {
     this.width,
     this.height,
     this.icon = Icons.movie_outlined,
+    this.headers,
   });
   final String? url;
   final double? width;
   final double? height;
   final IconData icon;
+
+  /// For images that need a session cookie (Comicarr's cached covers).
+  final Map<String, String>? headers;
 
   @override
   Widget build(BuildContext context) {
@@ -156,6 +164,7 @@ class Poster extends StatelessWidget {
           ? placeholder
           : Image.network(
               url!,
+              headers: headers,
               width: width,
               height: height,
               fit: BoxFit.cover,

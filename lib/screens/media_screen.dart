@@ -120,7 +120,7 @@ class _MediaScreenState extends State<MediaScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(server.name),
+        title: Text(server.mediaLabel),
         actions: [
           IconButton(
             tooltip: 'Queue',
@@ -151,6 +151,7 @@ class _MediaScreenState extends State<MediaScreen> {
           ServerPicker(
             servers: servers,
             selectedId: server.id,
+            labelOf: (s) => s.mediaLabel,
             onSelected: (s) => context.read<NavState>().openMedia(s.id),
           ),
           Padding(

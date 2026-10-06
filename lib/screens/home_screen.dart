@@ -7,6 +7,7 @@ import '../models/server.dart';
 import '../services/arr.dart';
 import '../services/download_client.dart';
 import '../services/overseerr.dart';
+import '../services/tmdb.dart';
 import '../services/streaming.dart';
 import '../state/nav_state.dart';
 import '../state/server_store.dart';
@@ -54,6 +55,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    _builtInTmdb?.close();
     _timer?.cancel();
     super.dispose();
   }
@@ -72,13 +74,28 @@ class _HomeScreenState extends State<HomeScreen> {
     return s == null ? null : store.client<OverseerrClient>(s);
   }
 
+  /// The app's built-in TMDB client, when this build has a key.
+  late final TmdbClient? _builtInTmdb = builtInTmdb == null
+      ? null
+      : TmdbClient(builtInTmdb!);
+
+  /// Trending and popular lists come from TMDB (trending today): the user's
+  /// own key if they added one, else the app's built-in key. Without either
+  /// they come from Overseerr's Discover lists.
   Future<void> _loadDiscover() async {
-    final client = _overseerr(context.read<ServerStore>());
-    if (client == null) return;
+    final store = context.read<ServerStore>();
+    final tmdbServer = store.ofKinds({ServiceKind.tmdb}).firstOrNull;
+    final tmdb = tmdbServer == null
+        ? _builtInTmdb
+        : store.client<TmdbClient>(tmdbServer);
+    final overseerr = _overseerr(store);
+    if (tmdb == null && overseerr == null) return;
     await Future.wait(
       DiscoverFeed.values.map((feed) async {
         try {
-          final items = await client.discover(feed);
+          final items = tmdb != null
+              ? await tmdb.discover(feed)
+              : await overseerr!.discover(feed);
           if (mounted) setState(() => _feeds[feed] = items);
         } catch (_) {
           // Discover is a nice-to-have; the requests card shows real errors.
@@ -112,7 +129,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _openDiscover(DiscoverResult r) async {
     final client = _overseerr(context.read<ServerStore>());
-    if (client == null) return;
     final requested = await showDiscoverSheet(context, client, r);
     if (requested && mounted) {
       _loadDiscover();
@@ -204,107 +220,106 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Control')),
-      body: store.servers.isEmpty
-          ? _Welcome(onAdd: () => addServer(context))
-          : RefreshIndicator(
-              onRefresh: _loadAll,
-              child: ListView(
-                padding: const EdgeInsets.only(bottom: 32),
-                children: [
-                  if (trending.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    TrendingBanner(
-                      items: trending.take(10).toList(),
-                      onTap: _openDiscover,
-                    ),
-                  ],
-                  if (_active.isNotEmpty) ...[
-                    SectionHeader('Now downloading · ${_active.length}'),
-                    NowDownloadingStrip(items: _active, onTap: _openQueue),
-                  ],
-                  if (downloaders.isNotEmpty) ...[
-                    const SectionHeader('Downloads'),
-                    for (final s in downloaders)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-                        child: _DownloaderCard(
-                          server: s,
-                          snapshot: _snapshots[s.id],
-                          error: _errors[s.id],
-                          onTap: () =>
-                              context.read<NavState>().openDownloader(s.id),
-                        ),
-                      ),
-                  ],
-                  if (_pendingRequests != null)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-                      child: Card(
-                        child: ListTile(
-                          leading: Icon(ServiceKind.overseerr.icon),
-                          title: Text(
-                            _pendingRequests == 0
-                                ? 'No requests waiting'
-                                : '$_pendingRequests request${_pendingRequests == 1 ? '' : 's'} waiting for approval',
-                          ),
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: () async {
-                            await Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const RequestsScreen(),
-                              ),
-                            );
-                            _loadRequests();
-                          },
-                        ),
-                      ),
-                    ),
-                  if (store.ofKinds(ServiceKind.streaming).isNotEmpty) ...[
-                    SectionHeader(
-                      sessions.isEmpty
-                          ? 'Nobody watching'
-                          : 'Watching now · ${sessions.length}',
-                      trailing: TextButton(
-                        onPressed: () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const ActivityScreen(),
-                          ),
-                        ),
-                        child: const Text('Details'),
-                      ),
-                    ),
-                    for (final s in sessions.take(3))
-                      PlaySessionTile(session: s),
-                  ],
-                  if (_upcoming != null) ...[
-                    SectionHeader(
-                      'Coming up this week',
-                      trailing: TextButton(
-                        onPressed: () =>
-                            context.read<NavState>().go(NavState.calendar),
-                        child: const Text('Calendar'),
-                      ),
-                    ),
-                    if (_upcoming!.isEmpty)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: Text(
-                          'Nothing scheduled.',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ),
-                    for (final e in _upcoming!.take(6)) CalendarTile(entry: e),
-                  ],
-                  for (final feed in DiscoverFeed.values.skip(1))
-                    if ((_feeds[feed] ?? const []).isNotEmpty) ...[
-                      SectionHeader(feed.label),
-                      PosterRow(items: _feeds[feed]!, onTap: _openDiscover),
-                    ],
-                ],
+      body: RefreshIndicator(
+        onRefresh: _loadAll,
+        child: ListView(
+          padding: const EdgeInsets.only(bottom: 32),
+          children: [
+            if (trending.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              TrendingBanner(
+                items: trending.take(10).toList(),
+                onTap: _openDiscover,
               ),
-            ),
+            ],
+            if (store.servers.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 24),
+                child: _Welcome(onAdd: () => addServer(context)),
+              ),
+            if (_active.isNotEmpty) ...[
+              SectionHeader('Now downloading · ${_active.length}'),
+              NowDownloadingStrip(items: _active, onTap: _openQueue),
+            ],
+            if (downloaders.isNotEmpty) ...[
+              const SectionHeader('Downloads'),
+              for (final s in downloaders)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                  child: _DownloaderCard(
+                    server: s,
+                    snapshot: _snapshots[s.id],
+                    error: _errors[s.id],
+                    onTap: () => context.read<NavState>().openDownloader(s.id),
+                  ),
+                ),
+            ],
+            if (_pendingRequests != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                child: Card(
+                  child: ListTile(
+                    leading: Icon(ServiceKind.overseerr.icon),
+                    title: Text(
+                      _pendingRequests == 0
+                          ? 'No requests waiting'
+                          : '$_pendingRequests request${_pendingRequests == 1 ? '' : 's'} waiting for approval',
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () async {
+                      await Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const RequestsScreen(),
+                        ),
+                      );
+                      _loadRequests();
+                    },
+                  ),
+                ),
+              ),
+            if (store.ofKinds(ServiceKind.streaming).isNotEmpty) ...[
+              SectionHeader(
+                sessions.isEmpty
+                    ? 'Nobody watching'
+                    : 'Watching now · ${sessions.length}',
+                trailing: TextButton(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const ActivityScreen()),
+                  ),
+                  child: const Text('Details'),
+                ),
+              ),
+              for (final s in sessions.take(3)) PlaySessionTile(session: s),
+            ],
+            if (_upcoming != null) ...[
+              SectionHeader(
+                'Coming up this week',
+                trailing: TextButton(
+                  onPressed: () =>
+                      context.read<NavState>().go(NavState.calendar),
+                  child: const Text('Calendar'),
+                ),
+              ),
+              if (_upcoming!.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(
+                    'Nothing scheduled.',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              for (final e in _upcoming!.take(6)) CalendarTile(entry: e),
+            ],
+            for (final feed in DiscoverFeed.values.skip(1))
+              if ((_feeds[feed] ?? const []).isNotEmpty) ...[
+                SectionHeader(feed.label),
+                PosterRow(items: _feeds[feed]!, onTap: _openDiscover),
+              ],
+          ],
+        ),
+      ),
     );
   }
 }
@@ -415,10 +430,10 @@ class _Welcome extends StatelessWidget {
     icon: Icons.tune,
     title: 'Welcome to Control',
     body:
-        'Manage SABnzbd, NZBGet, qBittorrent, Transmission, Sonarr, Radarr, '
-        'Lidarr, Bazarr, Prowlarr, Overseerr, Tautulli, Emby and Jellyfin '
+        'Manage your download clients, Sonarr, Radarr, Lidarr, Bazarr, '
+        'Prowlarr, Overseerr, Comicarr, Tautulli, Tracearr, Emby and Jellyfin '
         'from one place. '
-        'Start by adding a server.',
+        'Connect your first server to see your downloads and library here.',
     action: FilledButton.icon(
       onPressed: onAdd,
       icon: const Icon(Icons.add),

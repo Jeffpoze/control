@@ -1,5 +1,6 @@
 import '../models/server.dart';
 import '../util/format.dart';
+import 'ntfy.dart';
 import 'service_client.dart';
 
 /// A series (Sonarr), movie (Radarr) or artist (Lidarr), as shown in lists.
@@ -68,10 +69,13 @@ class CalendarEntry {
     required this.subtitle,
     required this.kind,
     required this.serverId,
+    this.mediaId = 0,
     this.posterUrl,
     this.hasFile = false,
   });
 
+  /// The series, movie or artist this belongs to, to open its page.
+  final int mediaId;
   final DateTime when;
   final String title;
   final String subtitle;
@@ -153,6 +157,112 @@ Duration? parseTimeSpan(Object? v) {
     minutes: int.parse(m[3]!),
     seconds: int.parse(m[4]!),
   );
+}
+
+/// A release found by a manual search, which can be grabbed.
+class ArrRelease {
+  ArrRelease(this.raw);
+  final Map<String, dynamic> raw;
+
+  String get title => (raw['title'] ?? '').toString();
+  String get guid => (raw['guid'] ?? '').toString();
+  int get indexerId => asInt(raw['indexerId']);
+  String get indexer => (raw['indexer'] ?? '').toString();
+  int get size => asInt(raw['size']);
+  String get protocol => (raw['protocol'] ?? '').toString();
+  bool get isTorrent => protocol == 'torrent';
+  int get seeders => asInt(raw['seeders']);
+  int get leechers => asInt(raw['leechers']);
+  String get quality =>
+      (((raw['quality'] as Map?)?['quality'] as Map?)?['name'] ?? '')
+          .toString();
+  int get customFormatScore => asInt(raw['customFormatScore']);
+  List<String> get languages => [
+    for (final l in (raw['languages'] as List? ?? const []))
+      if (l is Map && l['name'] != null) l['name'].toString(),
+  ];
+
+  /// Age in days (usenet) or since publish (torrents).
+  double get ageDays {
+    final hours = asDouble(raw['ageHours']);
+    if (hours > 0) return hours / 24;
+    return asDouble(raw['age']);
+  }
+
+  bool get rejected => raw['rejected'] == true;
+  List<String> get rejections => [
+    for (final r in (raw['rejections'] as List? ?? const []))
+      r is Map ? (r['reason'] ?? '').toString() : r.toString(),
+  ];
+}
+
+/// What can be changed on a series, movie or artist after adding it.
+class MediaEdit {
+  MediaEdit({
+    required this.monitored,
+    required this.qualityProfileId,
+    required this.rootFolderPath,
+    this.languageProfileId,
+    this.metadataProfileId,
+    this.seriesType,
+    this.seasonFolder,
+    this.minimumAvailability,
+    this.moveFiles = true,
+  });
+
+  bool monitored;
+  int qualityProfileId;
+  String rootFolderPath;
+  int? languageProfileId;
+  int? metadataProfileId;
+
+  /// Sonarr: standard, daily or anime.
+  String? seriesType;
+  bool? seasonFolder;
+
+  /// Radarr: announced, inCinemas or released.
+  String? minimumAvailability;
+
+  /// Move existing files when the root folder changes.
+  bool moveFiles;
+
+  static MediaEdit of(MediaItem item) {
+    final m = item.raw;
+    final path = (m['path'] ?? '').toString();
+    final root = (m['rootFolderPath'] ?? '').toString();
+    return MediaEdit(
+      monitored: m['monitored'] == true,
+      qualityProfileId: asInt(m['qualityProfileId']),
+      rootFolderPath: root.isNotEmpty ? trimSlash(root) : parentOf(path),
+      languageProfileId: m['languageProfileId'] == null
+          ? null
+          : asInt(m['languageProfileId']),
+      metadataProfileId: m['metadataProfileId'] == null
+          ? null
+          : asInt(m['metadataProfileId']),
+      seriesType: m['seriesType'] as String?,
+      seasonFolder: m['seasonFolder'] as bool?,
+      minimumAvailability: m['minimumAvailability'] as String?,
+    );
+  }
+
+  static String trimSlash(String p) =>
+      p.length > 1 && (p.endsWith('/') || p.endsWith('\\'))
+      ? p.substring(0, p.length - 1)
+      : p;
+
+  /// "/tv/Severance" → "/tv". Works with Windows paths too.
+  static String parentOf(String path) {
+    final p = trimSlash(path);
+    final i = p.lastIndexOf(RegExp(r'[/\\]'));
+    return i <= 0 ? p : p.substring(0, i);
+  }
+
+  static String folderOf(String path) {
+    final p = trimSlash(path);
+    final i = p.lastIndexOf(RegExp(r'[/\\]'));
+    return i < 0 ? p : p.substring(i + 1);
+  }
 }
 
 class Profile {
@@ -308,6 +418,91 @@ class ArrClient extends ServiceClient {
     );
     return toMedia((res as Map).cast());
   }
+
+  /// The PUT body for [edit]: the item as the *arr sent it, with the
+  /// changed settings, and a new path when the root folder changed.
+  static Map<String, dynamic> editBody(MediaItem item, MediaEdit edit) {
+    final body = Map<String, dynamic>.of(item.raw)
+      ..['monitored'] = edit.monitored
+      ..['qualityProfileId'] = edit.qualityProfileId;
+    if (edit.languageProfileId != null) {
+      body['languageProfileId'] = edit.languageProfileId;
+    }
+    if (edit.metadataProfileId != null) {
+      body['metadataProfileId'] = edit.metadataProfileId;
+    }
+    if (edit.seriesType != null) body['seriesType'] = edit.seriesType;
+    if (edit.seasonFolder != null) body['seasonFolder'] = edit.seasonFolder;
+    if (edit.minimumAvailability != null) {
+      body['minimumAvailability'] = edit.minimumAvailability;
+    }
+    final path = (item.raw['path'] ?? '').toString();
+    if (path.isNotEmpty &&
+        MediaEdit.parentOf(path) != MediaEdit.trimSlash(edit.rootFolderPath)) {
+      final sep = edit.rootFolderPath.contains('\\') ? '\\' : '/';
+      body['path'] =
+          '${MediaEdit.trimSlash(edit.rootFolderPath)}$sep${MediaEdit.folderOf(path)}';
+      body['rootFolderPath'] = edit.rootFolderPath;
+    }
+    return body;
+  }
+
+  /// Saves [edit]; moves the files too when the folder changed and asked.
+  Future<MediaItem> update(MediaItem item, MediaEdit edit) async {
+    final body = editBody(item, edit);
+    final moved = body['path'] != item.raw['path'];
+    final res = await sendJson(
+      'PUT',
+      '$_v/$resource/${item.id}',
+      json: body,
+      query: {if (moved) 'moveFiles': '${edit.moveFiles}'},
+    );
+    return toMedia((res as Map).cast());
+  }
+
+  // ---- Manual search ----
+
+  /// Asks every indexer for releases, like the *arr's interactive search.
+  /// Pass a movie (Radarr), an episode, or a series and season (Sonarr).
+  Future<List<ArrRelease>> releases({
+    int? movieId,
+    int? episodeId,
+    int? seriesId,
+    int? seasonNumber,
+    int? albumId,
+  }) async {
+    final list = await getJson(
+      '$_v/release',
+      query: {
+        if (movieId != null) 'movieId': '$movieId',
+        if (episodeId != null) 'episodeId': '$episodeId',
+        if (seriesId != null) 'seriesId': '$seriesId',
+        if (seasonNumber != null) 'seasonNumber': '$seasonNumber',
+        if (albumId != null) 'albumId': '$albumId',
+      },
+    ) as List;
+    return sortReleases([
+      for (final r in list)
+        if (r is Map) ArrRelease(r.cast()),
+    ]);
+  }
+
+  /// Approved releases first, then by custom format score and size, the way
+  /// the *arr would pick.
+  static List<ArrRelease> sortReleases(List<ArrRelease> list) =>
+      list..sort((a, b) {
+        if (a.rejected != b.rejected) return a.rejected ? 1 : -1;
+        final score = b.customFormatScore.compareTo(a.customFormatScore);
+        if (score != 0) return score;
+        return b.size.compareTo(a.size);
+      });
+
+  /// Sends a release to the download client.
+  Future<void> grab(ArrRelease r) => sendJson(
+    'POST',
+    '$_v/release',
+    json: {'guid': r.guid, 'indexerId': r.indexerId},
+  );
 
   Future<void> delete(MediaItem item, {bool deleteFiles = false}) => request(
     'DELETE',
@@ -521,6 +716,103 @@ class ArrClient extends ServiceClient {
     query: {'removeFromClient': '$removeFromClient', 'blocklist': '$blocklist'},
   );
 
+  // ---- Notifications ----
+
+  /// Name of the connection Control creates, so setting up again updates it.
+  static const notificationName = 'Control';
+
+  /// Adds (or updates) an ntfy connection under Settings → Connect.
+  Future<void> connectNtfy(NtfyTarget target, NotifyEvents events) async {
+    final schema = await getJson('$_v/notification/schema') as List;
+    final ntfy = schema
+        .cast<Map>()
+        .where((m) => m['implementation'] == 'Ntfy')
+        .firstOrNull;
+    if (ntfy == null) {
+      throw ApiException(
+        '${kind.label} on ${server.name} is too old to send ntfy notifications.',
+      );
+    }
+    final existing = (await getJson('$_v/notification') as List)
+        .cast<Map>()
+        .where(
+          (m) => m['implementation'] == 'Ntfy' && m['name'] == notificationName,
+        )
+        .firstOrNull;
+    final body = ntfyBody(
+      ntfy.cast(),
+      target,
+      events,
+      existingId: existing == null ? null : asInt(existing['id']),
+    );
+    if (existing == null) {
+      await sendJson('POST', '$_v/notification', json: body);
+    } else {
+      await sendJson('PUT', '$_v/notification/${body['id']}', json: body);
+    }
+  }
+
+  /// Fills in the ntfy template from `/notification/schema`. Only switches the
+  /// app reports as supported are turned on, so it works across Sonarr,
+  /// Radarr and Lidarr versions.
+  static Map<String, dynamic> ntfyBody(
+    Map<String, dynamic> schema,
+    NtfyTarget target,
+    NotifyEvents events, {
+    int? existingId,
+  }) {
+    final body = Map<String, dynamic>.of(schema)
+      ..['name'] = notificationName
+      ..remove('presets');
+    if (existingId != null) body['id'] = existingId;
+    body['fields'] = [
+      for (final f in (schema['fields'] as List? ?? const []))
+        if (f is Map)
+          {
+            ...f.cast<String, dynamic>(),
+            'value': switch (f['name']) {
+              'serverUrl' => target.publishUrl.toString(),
+              'accessToken' => target.token,
+              'topics' => [target.topic],
+              'priority' => 3,
+              _ => f['value'],
+            },
+          },
+    ];
+    const groups = {
+      'grabs': ['onGrab'],
+      'imports': [
+        'onDownload',
+        'onUpgrade',
+        'onImportComplete',
+        'onReleaseImport',
+        'onAlbumDownload',
+      ],
+      'problems': [
+        'onHealthIssue',
+        'onManualInteractionRequired',
+        'onDownloadFailure',
+        'onImportFailure',
+      ],
+    };
+    final wanted = {
+      'grabs': events.grabs,
+      'imports': events.imports,
+      'problems': events.problems,
+    };
+    for (final MapEntry(key: group, value: flags) in groups.entries) {
+      for (final flag in flags) {
+        if (!body.containsKey(flag)) continue;
+        final supports = 'supports${flag[0].toUpperCase()}${flag.substring(1)}';
+        body[flag] = wanted[group]! && body[supports] != false;
+      }
+    }
+    if (body.containsKey('includeHealthWarnings')) {
+      body['includeHealthWarnings'] = false;
+    }
+    return body;
+  }
+
   // ---- Calendar ----
 
   Future<List<CalendarEntry>> calendar(DateTime start, DateTime end) async {
@@ -551,6 +843,7 @@ class ArrClient extends ServiceClient {
               subtitle: '${ep.code} · ${ep.title}',
               kind: kind,
               serverId: server.id,
+              mediaId: asInt(m['seriesId']),
               posterUrl: imageUrl(series, 'poster'),
               hasFile: ep.hasFile,
             ),
@@ -571,6 +864,7 @@ class ArrClient extends ServiceClient {
                   subtitle: label,
                   kind: kind,
                   serverId: server.id,
+                  mediaId: asInt(m['id']),
                   posterUrl: imageUrl(m, 'poster'),
                   hasFile: m['hasFile'] == true,
                 ),
@@ -589,6 +883,7 @@ class ArrClient extends ServiceClient {
               subtitle: (m['title'] ?? '').toString(),
               kind: kind,
               serverId: server.id,
+              mediaId: asInt(m['artistId'] ?? artist['id']),
               posterUrl: imageUrl(m, 'cover') ?? imageUrl(artist, 'poster'),
               hasFile:
                   asInt((m['statistics'] as Map?)?['percentOfTracks']) >= 100,

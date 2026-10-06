@@ -84,7 +84,7 @@ class _SubtitlesScreenState extends State<SubtitlesScreen> {
         appBar: AppBar(title: const Text('Subtitles')),
         body: NoServersView(
           what: 'Bazarr',
-          onAdd: () => addServer(context, group: ServiceGroup.other),
+          onAdd: () => addServer(context, group: ServiceGroup.library),
         ),
       );
     }

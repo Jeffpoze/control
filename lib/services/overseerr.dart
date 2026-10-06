@@ -170,6 +170,14 @@ class OverseerrClient extends ServiceClient {
     ].where((r) => r.mediaType == 'movie' || r.mediaType == 'tv').toList();
   }
 
+  /// [r] with Overseerr's availability filled in (requested, available…),
+  /// for titles that came from TMDB directly.
+  Future<DiscoverResult> withStatus(DiscoverResult r) async {
+    final d = await getJson('/api/v1/${r.isTv ? 'tv' : 'movie'}/${r.tmdbId}');
+    final info = d is Map ? d['mediaInfo'] : null;
+    return DiscoverResult({...r.raw, 'mediaInfo': ?info});
+  }
+
   Future<void> submitRequest(DiscoverResult r) => sendJson(
     'POST',
     '/api/v1/request',

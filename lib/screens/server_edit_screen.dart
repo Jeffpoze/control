@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../models/server.dart';
 import '../services/clients.dart';
+import '../services/tmdb.dart';
 import '../state/server_store.dart';
 import '../widgets/common.dart';
 
@@ -24,7 +25,9 @@ class _ServerEditScreenState extends State<ServerEditScreen> {
     text: widget.existing?.localUrl ?? '',
   );
   late final _remote = TextEditingController(
-    text: widget.existing?.remoteUrl ?? '',
+    text:
+        widget.existing?.remoteUrl ??
+        (widget.kind == ServiceKind.tmdb ? TmdbClient.defaultUrl : ''),
   );
   late final _apiKey = TextEditingController(
     text: widget.existing?.apiKey ?? '',
@@ -225,7 +228,7 @@ class _ServerEditScreenState extends State<ServerEditScreen> {
                 obscureText: !_showSecret,
                 autocorrect: false,
                 decoration: InputDecoration(
-                  labelText: 'API key',
+                  labelText: kind.apiKeyLabel,
                   helperText: kind.apiKeyHint,
                   suffixIcon: IconButton(
                     icon: Icon(
@@ -235,7 +238,9 @@ class _ServerEditScreenState extends State<ServerEditScreen> {
                   ),
                 ),
                 validator: (v) =>
-                    (v ?? '').trim().isEmpty ? 'Enter the API key' : null,
+                    (v ?? '').trim().isEmpty && !kind.apiKeyOptional
+                    ? 'Enter the API key'
+                    : null,
               )
             else ...[
               TextFormField(

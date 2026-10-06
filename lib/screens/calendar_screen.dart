@@ -7,6 +7,7 @@ import '../services/arr.dart';
 import '../state/server_store.dart';
 import '../util/format.dart';
 import '../widgets/common.dart';
+import 'media_detail_screen.dart';
 import 'servers_screen.dart';
 
 /// Loads upcoming items from every Sonarr, Radarr and Lidarr, sorted by time.
@@ -146,6 +147,27 @@ class _CalendarScreenState extends State<CalendarScreen> {
   }
 }
 
+/// Opens the series, movie or artist a calendar entry belongs to.
+Future<void> openCalendarEntry(
+  BuildContext context,
+  CalendarEntry entry,
+) async {
+  final store = context.read<ServerStore>();
+  final server = store.byId(entry.serverId);
+  if (server == null || entry.mediaId == 0) return;
+  final client = store.client<ArrClient>(server);
+  MediaItem? item;
+  final ok = await runAction(context, () async {
+    item = await client.item(entry.mediaId);
+  });
+  if (!ok || item == null || !context.mounted) return;
+  await Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (_) => MediaDetailScreen(client: client, item: item!),
+    ),
+  );
+}
+
 class CalendarTile extends StatelessWidget {
   const CalendarTile({super.key, required this.entry});
   final CalendarEntry entry;
@@ -155,6 +177,9 @@ class CalendarTile extends StatelessWidget {
     final theme = Theme.of(context);
     final hasTime = entry.kind == ServiceKind.sonarr;
     return ListTile(
+      onTap: entry.mediaId == 0
+          ? null
+          : () => openCalendarEntry(context, entry),
       leading: Poster(
         url: entry.posterUrl,
         width: 36,

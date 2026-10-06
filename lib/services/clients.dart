@@ -3,7 +3,9 @@ import 'package:http/http.dart' as http;
 import '../models/server.dart';
 import 'arr.dart';
 import 'bazarr.dart';
+import 'comicarr.dart';
 import 'media_server.dart';
+import 'ntfy.dart';
 import 'nzbget.dart';
 import 'overseerr.dart';
 import 'prowlarr.dart';
@@ -11,6 +13,8 @@ import 'qbittorrent.dart';
 import 'sabnzbd.dart';
 import 'service_client.dart';
 import 'tautulli.dart';
+import 'tmdb.dart';
+import 'tracearr.dart';
 import 'transmission.dart';
 
 export 'service_client.dart';
@@ -36,4 +40,8 @@ ServiceClient createClient(ServerConfig server, {http.Client? httpClient}) =>
       ServiceKind.emby ||
       ServiceKind.jellyfin => MediaServerClient(server, httpClient: httpClient),
       ServiceKind.bazarr => BazarrClient(server, httpClient: httpClient),
+      ServiceKind.comicarr => ComicarrClient(server, httpClient: httpClient),
+      ServiceKind.tracearr => TracearrClient(server, httpClient: httpClient),
+      ServiceKind.ntfy => NtfyClient(server, httpClient: httpClient),
+      ServiceKind.tmdb => TmdbClient(server, httpClient: httpClient),
     };

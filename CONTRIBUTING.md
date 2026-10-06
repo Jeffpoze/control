@@ -7,3 +7,4 @@ Control is a Flutter app for iOS and Android. See the README for features and la
 - Secrets (API keys, passwords, custom headers) go through `SecretStore`, which uses the iOS Keychain and Android's encrypted storage. Never put them in SharedPreferences.
 - Don't add App Transport Security exceptions, cleartext-traffic exceptions or certificate bypasses. `dart:io` HTTP isn't subject to them, so plain-HTTP servers on the home network already work.
 - Before committing, run `dart format lib test`, `flutter analyze` (no issues) and `flutter test`. CI runs the same checks and builds both apps.
+- Release builds take two repository secrets: `TMDB_TOKEN` (passed as `--dart-define=TMDB_KEY`, never committed) and `ANDROID_KEYSTORE` / `ANDROID_KEYSTORE_PASSWORD` (the Android signing key, base64). Local iPhone builds read the TMDB key from `~/.config/control/tmdb_key`.
